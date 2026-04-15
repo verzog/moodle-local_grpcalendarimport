@@ -12,7 +12,6 @@ jobs:
         env:
           POSTGRES_USER: moodle
           POSTGRES_PASSWORD: moodle
-          POSTGRES_DB: moodle
         ports:
           - 5432:5432
         options: >-
@@ -26,7 +25,6 @@ jobs:
         env:
           MYSQL_USER: moodle
           MYSQL_PASSWORD: moodle
-          MYSQL_DATABASE: moodle
           MYSQL_ROOT_PASSWORD: moodle
         ports:
           - 3306:3306
