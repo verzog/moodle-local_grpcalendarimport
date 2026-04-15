@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/user/moodle-local_grpcalendarimport/.claude/bump-version.sh",
+            "statusMessage": "Bumping plugin version..."
+          }
+        ]
+      }
+    ]
+  }
+}
