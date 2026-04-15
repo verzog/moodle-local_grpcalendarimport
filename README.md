@@ -12,8 +12,8 @@ A Moodle local plugin that lets administrators bulk-import group calendar events
 
 ## Requirements
 
-- Moodle 4.0 or later (`requires = 2022041900`)
-- PHP 7.4+
+- Moodle 4.5 or later (`requires = 2024100700`)
+- PHP 8.1+
 
 ## Installation
 
