@@ -10,8 +10,9 @@ jobs:
       postgres:
         image: postgres:14
         env:
-          POSTGRES_USER: moodle
-          POSTGRES_PASSWORD: moodle
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
         ports:
           - 5432:5432
         options: >-
@@ -23,8 +24,6 @@ jobs:
       mariadb:
         image: mariadb:10.6
         env:
-          MYSQL_USER: moodle
-          MYSQL_PASSWORD: moodle
           MYSQL_ROOT_PASSWORD: moodle
         ports:
           - 3306:3306
@@ -38,16 +37,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Moodle 4.5 LTS — PHP 8.1 / 8.2 / 8.3
+          # Moodle 4.5 LTS — PHP 8.1 / pgsql
           - php: '8.1'
             moodle-branch: MOODLE_405_STABLE
             database: pgsql
+            db-user: postgres
+            db-pass: postgres
+          # Moodle 4.5 LTS — PHP 8.2 / mariadb
           - php: '8.2'
             moodle-branch: MOODLE_405_STABLE
             database: mariadb
+            db-user: root
+            db-pass: moodle
+          # Moodle 4.5 LTS — PHP 8.3 / pgsql
           - php: '8.3'
             moodle-branch: MOODLE_405_STABLE
             database: pgsql
+            db-user: postgres
+            db-pass: postgres
 
     steps:
       - name: Check out plugin
@@ -75,8 +82,8 @@ jobs:
             --plugin ./plugin \
             --db-host=127.0.0.1 \
             --db-type=${{ matrix.database }} \
-            --db-user=moodle \
-            --db-pass=moodle \
+            --db-user=${{ matrix.db-user }} \
+            --db-pass=${{ matrix.db-pass }} \
             --db-name=moodle \
             --branch=${{ matrix.moodle-branch }}
         env:
