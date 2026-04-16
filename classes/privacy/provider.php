@@ -15,17 +15,28 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Plugin version definition for local_grpcalendarimport.
+ * Privacy API: null provider for local_grpcalendarimport.
+ *
+ * This plugin does not store any personal data.
  *
  * @package   local_grpcalendarimport
  * @copyright 2026 SCCA
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+namespace local_grpcalendarimport\privacy;
 
-$plugin->component = 'local_grpcalendarimport';
-$plugin->version   = 2026041601;
-$plugin->requires  = 2024100700; // Moodle 4.5.
-$plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.1.0';
+/**
+ * Privacy provider declaring that this plugin stores no personal data.
+ */
+class provider implements \core_privacy\local\metadata\null_provider {
+
+    /**
+     * Returns the reason string key explaining why no data is stored.
+     *
+     * @return string
+     */
+    public static function get_reason(): string {
+        return 'privacy:metadata';
+    }
+}
