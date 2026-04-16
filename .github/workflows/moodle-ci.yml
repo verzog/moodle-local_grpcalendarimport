@@ -115,6 +115,9 @@ jobs:
         run: moodle-plugin-ci savepoints ./plugin
         if: ${{ !cancelled() }}
 
+      - name: Install required locales
+        run: sudo locale-gen en_AU.UTF-8 && sudo update-locale
+
       - name: PHPUnit
         run: moodle-plugin-ci phpunit --fail-on-warning ./plugin
         if: ${{ !cancelled() }}

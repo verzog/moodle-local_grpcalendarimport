@@ -27,7 +27,7 @@ namespace local_grpcalendarimport;
 use advanced_testcase;
 
 /**
- * Unit test class for local_grpcalendarimport.
+ * Unit test class for local_grpcalendarimport library functions.
  *
  * @package   local_grpcalendarimport
  * @copyright 2026 SCCA
@@ -35,136 +35,265 @@ use advanced_testcase;
  */
 final class locallib_test extends advanced_testcase {
     /**
-     * Test validation of valid event data.
+     * Test parse_csv with basic CSV data.
      */
-    public function test_validate_event_valid(): void {
+    public function test_parse_csv_basic(): void {
         $this->resetAfterTest();
 
-        $event = [
-            'name' => 'Test Event',
-            'courseid' => 1,
-            'groupid' => 1,
-            'timestart' => time(),
-        ];
+        $csvdata = "name,courseid,groupid,timestart\n" .
+                   "Event 1,1,1,1700000000\n" .
+                   "Event 2,1,2,1700000001\n";
 
-        $result = \local_grpcalendarimport_validate_event($event);
+        $tmpfile = tempnam(sys_get_temp_dir(), 'csv_');
+        file_put_contents($tmpfile, $csvdata);
 
-        $this->assertTrue($result['valid']);
-        $this->assertEmpty($result['errors']);
+        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+
+        $this->assertCount(2, $rows);
+        $this->assertEquals('Event 1', $rows[0]['name']);
+        $this->assertEquals('1', $rows[0]['courseid']);
+        $this->assertEquals('1', $rows[0]['groupid']);
+
+        unlink($tmpfile);
     }
 
     /**
-     * Test validation of event with missing name.
+     * Test parse_csv with TSV data.
      */
-    public function test_validate_event_missing_name(): void {
+    public function test_parse_csv_tsv(): void {
         $this->resetAfterTest();
 
-        $event = [
+        $tsvdata = "name\tcourseid\tgroupid\ttimestart\n" .
+                   "Event 1\t1\t1\t1700000000\n";
+
+        $tmpfile = tempnam(sys_get_temp_dir(), 'tsv_');
+        file_put_contents($tmpfile, $tsvdata);
+
+        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+
+        $this->assertCount(1, $rows);
+        $this->assertEquals('Event 1', $rows[0]['name']);
+
+        unlink($tmpfile);
+    }
+
+    /**
+     * Test parse_csv with BOM stripping.
+     */
+    public function test_parse_csv_bom_stripping(): void {
+        $this->resetAfterTest();
+
+        // Add UTF-8 BOM to CSV header.
+        $csvdata = "\xef\xbb\xbfname,courseid,groupid,timestart\n" .
+                   "Event 1,1,1,1700000000\n";
+
+        $tmpfile = tempnam(sys_get_temp_dir(), 'bom_');
+        file_put_contents($tmpfile, $csvdata);
+
+        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+
+        $this->assertCount(1, $rows);
+        // BOM should be stripped from 'name' header.
+        $this->assertArrayHasKey('name', $rows[0]);
+
+        unlink($tmpfile);
+    }
+
+    /**
+     * Test parse_csv with short row padding.
+     */
+    public function test_parse_csv_short_row_padding(): void {
+        $this->resetAfterTest();
+
+        $csvdata = "name,courseid,groupid,timestart,description\n" .
+                   "Event 1,1,1,1700000000\n";
+
+        $tmpfile = tempnam(sys_get_temp_dir(), 'short_');
+        file_put_contents($tmpfile, $csvdata);
+
+        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+
+        $this->assertCount(1, $rows);
+        $this->assertArrayHasKey('description', $rows[0]);
+        $this->assertEquals('', $rows[0]['description']);
+
+        unlink($tmpfile);
+    }
+
+    /**
+     * Test parse_csv with invalid filepath.
+     */
+    public function test_parse_csv_invalid_path(): void {
+        $this->resetAfterTest();
+
+        $rows = \local_grpcalendarimport_parse_csv('/nonexistent/path/to/file.csv');
+
+        $this->assertEmpty($rows);
+    }
+
+    /**
+     * Test create_event with missing name.
+     */
+    public function test_create_event_missing_name(): void {
+        $this->resetAfterTest();
+
+        $row = [
             'name' => '',
             'courseid' => 1,
             'groupid' => 1,
             'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_validate_event($event);
+        $result = \local_grpcalendarimport_create_event($row, false, 1);
 
-        $this->assertFalse($result['valid']);
-        $this->assertNotEmpty($result['errors']);
+        $this->assertEquals('error', $result['status']);
+        $this->assertStringContainsString('Missing name', $result['message']);
     }
 
     /**
-     * Test validation of event with missing courseid.
+     * Test create_event with invalid courseid.
      */
-    public function test_validate_event_missing_courseid(): void {
+    public function test_create_event_invalid_courseid(): void {
         $this->resetAfterTest();
 
-        $event = [
+        $row = [
             'name' => 'Test Event',
             'courseid' => 0,
             'groupid' => 1,
             'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_validate_event($event);
+        $result = \local_grpcalendarimport_create_event($row, false, 1);
 
-        $this->assertFalse($result['valid']);
-        $this->assertNotEmpty($result['errors']);
+        $this->assertEquals('error', $result['status']);
+        $this->assertStringContainsString('Invalid or missing courseid', $result['message']);
     }
 
     /**
-     * Test validation of event with missing groupid.
+     * Test create_event with invalid groupid.
      */
-    public function test_validate_event_missing_groupid(): void {
+    public function test_create_event_invalid_groupid(): void {
         $this->resetAfterTest();
 
-        $event = [
+        $row = [
             'name' => 'Test Event',
             'courseid' => 1,
             'groupid' => 0,
             'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_validate_event($event);
+        $result = \local_grpcalendarimport_create_event($row, false, 1);
 
-        $this->assertFalse($result['valid']);
-        $this->assertNotEmpty($result['errors']);
+        $this->assertEquals('error', $result['status']);
+        $this->assertStringContainsString('Invalid or missing groupid', $result['message']);
     }
 
     /**
-     * Test validation of event with missing timestart.
+     * Test create_event with missing course.
      */
-    public function test_validate_event_missing_timestart(): void {
+    public function test_create_event_course_not_found(): void {
         $this->resetAfterTest();
 
-        $event = [
+        $row = [
             'name' => 'Test Event',
-            'courseid' => 1,
+            'courseid' => 9999,
             'groupid' => 1,
-            'timestart' => 0,
+            'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_validate_event($event);
+        $result = \local_grpcalendarimport_create_event($row, false, 1);
 
-        $this->assertFalse($result['valid']);
-        $this->assertNotEmpty($result['errors']);
+        $this->assertEquals('error', $result['status']);
+        $this->assertStringContainsString('not found', $result['message']);
     }
 
     /**
-     * Test processing empty events array.
+     * Test create_event with success (requires valid course and group).
      */
-    public function test_process_events_empty(): void {
-        $this->resetAfterTest();
+    public function test_create_event_success(): void {
+        $this->resetAfterTest(true);
 
-        $events = [];
-        $result = \local_grpcalendarimport_process_events($events);
+        // Create a course and group for testing.
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $group = $generator->create_group(['courseid' => $course->id]);
 
-        $this->assertEmpty($result);
+        $row = [
+            'name' => 'Test Event',
+            'courseid' => $course->id,
+            'groupid' => $group->id,
+            'timestart' => time(),
+            'timeduration' => 3600,
+            'description' => 'Test description',
+            'location' => 'Test location',
+            'visible' => 1,
+            'eventtype' => 'group',
+        ];
+
+        $result = \local_grpcalendarimport_create_event($row, false, 1);
+
+        $this->assertEquals('ok', $result['status']);
+        $this->assertStringContainsString('Created', $result['message']);
     }
 
     /**
-     * Test statistics retrieval without course filter.
+     * Test create_event duplicate skip when enabled.
      */
-    public function test_get_statistics_all(): void {
-        $this->resetAfterTest();
+    public function test_create_event_duplicate_skip(): void {
+        $this->resetAfterTest(true);
 
-        $stats = \local_grpcalendarimport_get_statistics();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $group = $generator->create_group(['courseid' => $course->id]);
 
-        $this->assertIsArray($stats);
-        $this->assertArrayHasKey('total_events', $stats);
-        $this->assertArrayHasKey('courseid', $stats);
-        $this->assertArrayHasKey('timestamp', $stats);
+        $eventdata = [
+            'name' => 'Duplicate Event',
+            'courseid' => $course->id,
+            'groupid' => $group->id,
+            'timestart' => 1700000000,
+            'timeduration' => 3600,
+            'description' => 'Test',
+            'visible' => 1,
+            'eventtype' => 'group',
+        ];
+
+        // Create the first event.
+        $result1 = \local_grpcalendarimport_create_event($eventdata, false, 1);
+        $this->assertEquals('ok', $result1['status']);
+
+        // Try to create duplicate with skipduplicates enabled.
+        $result2 = \local_grpcalendarimport_create_event($eventdata, true, 2);
+        $this->assertEquals('skip', $result2['status']);
+        $this->assertStringContainsString('Duplicate skipped', $result2['message']);
     }
 
     /**
-     * Test statistics retrieval with course filter.
+     * Test create_event duplicate allowed when skipduplicates is false.
      */
-    public function test_get_statistics_by_course(): void {
-        $this->resetAfterTest();
+    public function test_create_event_duplicate_not_skipped(): void {
+        $this->resetAfterTest(true);
 
-        $stats = \local_grpcalendarimport_get_statistics(1);
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $group = $generator->create_group(['courseid' => $course->id]);
 
-        $this->assertIsArray($stats);
-        $this->assertArrayHasKey('total_events', $stats);
-        $this->assertEquals(1, $stats['courseid']);
+        $eventdata = [
+            'name' => 'Duplicate Event',
+            'courseid' => $course->id,
+            'groupid' => $group->id,
+            'timestart' => 1700000000,
+            'timeduration' => 3600,
+            'description' => 'Test',
+            'visible' => 1,
+            'eventtype' => 'group',
+        ];
+
+        // Create the first event.
+        $result1 = \local_grpcalendarimport_create_event($eventdata, false, 1);
+        $this->assertEquals('ok', $result1['status']);
+
+        // Try to create duplicate with skipduplicates disabled.
+        $result2 = \local_grpcalendarimport_create_event($eventdata, false, 2);
+        $this->assertEquals('ok', $result2['status']);
     }
 }

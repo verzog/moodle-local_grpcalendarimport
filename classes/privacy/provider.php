@@ -24,148 +24,27 @@
 
 namespace local_grpcalendarimport\privacy;
 
-use core_privacy\local\metadata\collection;
-use core_privacy\local\request\approved_contextlist;
-use core_privacy\local\request\approved_userlist;
-use core_privacy\local\request\contextlist;
-use core_privacy\local\request\userlist;
-use core_privacy\local\request\writer;
+use core_privacy\local\metadata\null_provider;
 
 /**
  * Privacy provider for the local_grpcalendarimport plugin.
+ *
+ * The plugin stores calendar event data, but the events are created by import
+ * and do not directly identify individuals. Personal data (like event creator)
+ * is handled by core Moodle's calendar event system, not this plugin.
  *
  * @package   local_grpcalendarimport
  * @copyright 2026 SCCA
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-final class provider implements
-    \core_privacy\local\metadata\provider,
-    \core_privacy\local\request\core_userlist_provider {
-
+final class provider implements null_provider {
     /**
-     * Return the fields which contain personal data.
+     * Get the language string identifier with the component's language
+     * file to explain why this plugin stores no data.
      *
-     * @param collection $collection The collection of personal data.
-     * @return collection The collection of personal data.
+     * @return string
      */
-    public static function get_metadata(collection $collection): collection {
-        $collection->add_database_table(
-            'event',
-            [
-                'userid' => 'privacy:metadata:event:userid',
-                'description' => 'privacy:metadata:event:description',
-                'location' => 'privacy:metadata:event:location',
-                'uuid' => 'privacy:metadata:event:uuid',
-            ],
-            'privacy:metadata:event'
-        );
-
-        return $collection;
-    }
-
-    /**
-     * Get the list of contexts that contain user data.
-     *
-     * @param int $userid The user ID.
-     * @return contextlist The contextlist.
-     */
-    public static function get_contexts_for_userid(int $userid): contextlist {
-        $contextlist = new contextlist();
-
-        $sql = 'SELECT DISTINCT c.id
-                  FROM {context} c
-                  JOIN {course} co ON c.instanceid = co.id
-                  JOIN {event} e ON e.courseid = co.id
-                 WHERE c.contextlevel = :contextlevel
-                   AND e.userid = :userid';
-
-        $params = [
-            'contextlevel' => CONTEXT_COURSE,
-            'userid' => $userid,
-        ];
-
-        $contextlist->add_from_sql($sql, $params);
-
-        return $contextlist;
-    }
-
-    /**
-     * Get the list of users in a context.
-     *
-     * @param userlist $userlist The userlist.
-     * @return void
-     */
-    public static function get_users_in_context(userlist $userlist): void {
-        $context = $userlist->get_context();
-
-        if ($context->contextlevel != CONTEXT_COURSE) {
-            return;
-        }
-
-        $sql = 'SELECT DISTINCT e.userid
-                  FROM {event} e
-                 WHERE e.courseid = :courseid
-                   AND e.userid != 0';
-
-        $params = [
-            'courseid' => $context->instanceid,
-        ];
-
-        $userlist->add_from_sql('userid', $sql, $params);
-    }
-
-    /**
-     * Delete all user data in a list of contexts.
-     *
-     * @param approved_contextlist $contextlist The approved contexts.
-     * @return void
-     */
-    public static function delete_data_for_contexts(approved_contextlist $contextlist): void {
-        global $DB;
-
-        foreach ($contextlist->get_contexts() as $context) {
-            if ($context->contextlevel != CONTEXT_COURSE) {
-                continue;
-            }
-
-            $DB->delete_records('event', ['courseid' => $context->instanceid]);
-        }
-    }
-
-    /**
-     * Delete all user data for a given user.
-     *
-     * @param int $userid The user ID.
-     * @return void
-     */
-    public static function delete_data_for_user(int $userid): void {
-        global $DB;
-
-        $DB->delete_records('event', ['userid' => $userid]);
-    }
-
-    /**
-     * Delete user data in bulk for a list of users.
-     *
-     * @param approved_userlist $userlist The approved user list.
-     * @return void
-     */
-    public static function delete_data_for_users(approved_userlist $userlist): void {
-        global $DB;
-
-        $context = $userlist->get_context();
-
-        if ($context->contextlevel != CONTEXT_COURSE) {
-            return;
-        }
-
-        $userids = $userlist->get_userids();
-
-        foreach ($userids as $userid) {
-            $DB->delete_records('event', [
-                'userid' => $userid,
-                'courseid' => $context->instanceid,
-            ]);
-        }
+    public static function get_reason(): string {
+        return 'privacy:metadata';
     }
 }
