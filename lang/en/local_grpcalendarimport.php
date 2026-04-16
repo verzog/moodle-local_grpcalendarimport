@@ -26,6 +26,7 @@ defined('MOODLE_INTERNAL') || die();
 
 // Strings in alphabetical order as required by Moodle coding style.
 $string['calendarimport:manage'] = 'Import calendar events';
+$string['privacy:metadata']      = 'The Calendar Group Event Importer plugin does not store any personal data.';
 $string['import_button']         = 'Import Events';
 $string['import_heading']        = 'Import Group Calendar Events';
 $string['pluginname']            = 'Calendar Group Event Importer';

@@ -89,6 +89,9 @@ jobs:
         env:
           DB: ${{ matrix.database }}
 
+      - name: Install required locales
+        run: sudo locale-gen en_AU.UTF-8 && sudo update-locale
+
       - name: PHP Lint
         run: moodle-plugin-ci phplint
         if: ${{ !cancelled() }}

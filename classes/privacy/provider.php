@@ -15,17 +15,30 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Plugin version definition for local_grpcalendarimport.
+ * Privacy provider for local_grpcalendarimport.
+ *
+ * This plugin imports calendar events via CSV upload and does not store any
+ * personal data itself; all event records belong to the core calendar subsystem.
  *
  * @package   local_grpcalendarimport
  * @copyright 2026 SCCA
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-defined('MOODLE_INTERNAL') || die();
+namespace local_grpcalendarimport\privacy;
 
-$plugin->component = 'local_grpcalendarimport';
-$plugin->version   = 2026041601;
-$plugin->requires  = 2024100700; // Moodle 4.5.
-$plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.0.1';
+use core_privacy\local\metadata\null_provider;
+
+/**
+ * Privacy provider — this plugin stores no personal data of its own.
+ */
+class provider implements null_provider {
+    /**
+     * Get a description of the user data stored or processed by this plugin.
+     *
+     * @return string Language string key.
+     */
+    public static function get_reason(): string {
+        return 'privacy:metadata';
+    }
+}
