@@ -26,8 +26,6 @@ require_once(__DIR__ . '/../locallib.php');
  * @package   local_grpcalendarimport
  * @copyright 2026 SCCA
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers ::local_grpcalendarimport_parse_csv
- * @covers ::local_grpcalendarimport_create_event
  */
 final class locallib_test extends \advanced_testcase {
     /**
@@ -37,11 +35,17 @@ final class locallib_test extends \advanced_testcase {
      */
     private ?string $tmpfile = null;
 
+    /**
+     * Set up test fixtures before each test.
+     */
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest(true);
     }
 
+    /**
+     * Remove any temp files and restore state after each test.
+     */
     protected function tearDown(): void {
         if ($this->tmpfile !== null && file_exists($this->tmpfile)) {
             unlink($this->tmpfile);

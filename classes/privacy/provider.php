@@ -31,6 +31,10 @@ use core_privacy\local\metadata\null_provider;
 
 /**
  * Privacy provider — this plugin stores no personal data of its own.
+ *
+ * @package   local_grpcalendarimport
+ * @copyright 2026 SCCA
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider implements null_provider {
     /**
