@@ -16,7 +16,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 3
@@ -83,6 +83,7 @@ jobs:
       - name: Install Moodle (${{ matrix.moodle-branch }}, ${{ matrix.database }})
         run: |
           moodle-plugin-ci install ./plugin \
+            --moodle /home/runner/work/moodle \
             --db-host=127.0.0.1 \
             --db-port=${{ matrix.db-port }} \
             --db-type=${{ matrix.database }} \
