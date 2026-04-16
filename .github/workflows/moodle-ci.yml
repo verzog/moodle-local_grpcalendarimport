@@ -67,6 +67,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: mbstring, xml, curl, zip, gd, intl, pgsql, pdo_pgsql, mysqli, pdo_mysql
+          ini-values: max_input_vars=5000
           coverage: none
 
       - name: Install moodle-plugin-ci
@@ -90,30 +91,30 @@ jobs:
           DB: ${{ matrix.database }}
 
       - name: PHP Lint
-        run: moodle-plugin-ci phplint
+        run: moodle-plugin-ci phplint ./plugin
         if: ${{ !cancelled() }}
 
       - name: PHP Mess Detector
-        run: moodle-plugin-ci phpmd
+        run: moodle-plugin-ci phpmd ./plugin
         if: ${{ !cancelled() }}
         continue-on-error: true
 
       - name: Moodle Code Checker (phpcs)
-        run: moodle-plugin-ci codechecker --max-warnings 0
+        run: moodle-plugin-ci codechecker --max-warnings 0 ./plugin
         if: ${{ !cancelled() }}
 
       - name: Moodle PHPDoc Checker
-        run: moodle-plugin-ci phpdoc --max-warnings 0
+        run: moodle-plugin-ci phpdoc --max-warnings 0 ./plugin
         if: ${{ !cancelled() }}
 
       - name: Validate plugin structure
-        run: moodle-plugin-ci validate
+        run: moodle-plugin-ci validate ./plugin
         if: ${{ !cancelled() }}
 
       - name: Check upgrade savepoints
-        run: moodle-plugin-ci savepoints
+        run: moodle-plugin-ci savepoints ./plugin
         if: ${{ !cancelled() }}
 
       - name: PHPUnit
-        run: moodle-plugin-ci phpunit --fail-on-warning
+        run: moodle-plugin-ci phpunit --fail-on-warning ./plugin
         if: ${{ !cancelled() }}
