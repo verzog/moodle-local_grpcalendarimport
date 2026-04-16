@@ -35,12 +35,32 @@ require_once($CFG->dirroot . '/local/grpcalendarimport/locallib.php');
  */
 class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
+    /** @var string[] Temp files to delete after each test. */
+    private array $tmpfiles = [];
+
+    /**
+     * Remove any temp files created during the test.
+     *
+     * @return void
+     */
+    protected function tearDown(): void {
+        foreach ($this->tmpfiles as $path) {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+        $this->tmpfiles = [];
+        parent::tearDown();
+    }
+
     // -------------------------------------------------------------------------
     // local_grpcalendarimport_parse_csv
     // -------------------------------------------------------------------------
 
     /**
      * Returns an empty array when the file has no data rows.
+     *
+     * @return void
      */
     public function test_parse_csv_empty_file(): void {
         $tmpfile = $this->make_tmpfile('');
@@ -51,6 +71,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Header-only file returns an empty array.
+     *
+     * @return void
      */
     public function test_parse_csv_header_only(): void {
         $tmpfile = $this->make_tmpfile("name,courseid,groupid,timestart\n");
@@ -60,6 +82,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Parses a simple comma-delimited CSV correctly.
+     *
+     * @return void
      */
     public function test_parse_csv_comma_delimited(): void {
         $content = "name,courseid,groupid,timestart\nEvent One,2,3,1700000000\n";
@@ -74,6 +98,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Parses a tab-delimited TSV correctly.
+     *
+     * @return void
      */
     public function test_parse_csv_tab_delimited(): void {
         $content = "name\tcourseid\tgroupid\ttimestart\nEvent Tab\t2\t3\t1700000000\n";
@@ -85,6 +111,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Strips UTF-8 BOM from the first header column.
+     *
+     * @return void
      */
     public function test_parse_csv_strips_bom(): void {
         $bom = "\xEF\xBB\xBF";
@@ -98,6 +126,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Short rows are padded so array_combine does not throw.
+     *
+     * @return void
      */
     public function test_parse_csv_short_row_padded(): void {
         $content = "name,courseid,groupid,timestart\nShort Row\n";
@@ -110,6 +140,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Parses multiple data rows.
+     *
+     * @return void
      */
     public function test_parse_csv_multiple_rows(): void {
         $content = "name,courseid,groupid,timestart\nAlpha,2,3,1700000000\nBeta,2,3,1700003600\n";
@@ -126,6 +158,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Missing event name returns an error result.
+     *
+     * @return void
      */
     public function test_create_event_missing_name(): void {
         $this->resetAfterTest();
@@ -139,6 +173,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Zero courseid returns an error result.
+     *
+     * @return void
      */
     public function test_create_event_invalid_courseid(): void {
         $this->resetAfterTest();
@@ -151,6 +187,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Zero groupid returns an error result.
+     *
+     * @return void
      */
     public function test_create_event_invalid_groupid(): void {
         $this->resetAfterTest();
@@ -163,6 +201,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Zero timestart returns an error result.
+     *
+     * @return void
      */
     public function test_create_event_invalid_timestart(): void {
         $this->resetAfterTest();
@@ -175,6 +215,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Non-existent course returns an error result.
+     *
+     * @return void
      */
     public function test_create_event_course_not_found(): void {
         $this->resetAfterTest();
@@ -187,6 +229,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Group that does not belong to the given course returns an error result.
+     *
+     * @return void
      */
     public function test_create_event_group_wrong_course(): void {
         $this->resetAfterTest();
@@ -209,6 +253,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Valid row creates the event and returns ok status.
+     *
+     * @return void
      */
     public function test_create_event_success(): void {
         $this->resetAfterTest();
@@ -228,6 +274,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Second identical row is skipped when duplicate checking is enabled.
+     *
+     * @return void
      */
     public function test_create_event_skip_duplicate(): void {
         $this->resetAfterTest();
@@ -250,6 +298,8 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
 
     /**
      * Second identical row is NOT skipped when duplicate checking is disabled.
+     *
+     * @return void
      */
     public function test_create_event_no_skip_when_disabled(): void {
         $this->resetAfterTest();
@@ -281,11 +331,7 @@ class local_grpcalendarimport_locallib_test extends advanced_testcase {
     private function make_tmpfile(string $content): string {
         $path = tempnam(sys_get_temp_dir(), 'grpcal_test_');
         file_put_contents($path, $content);
-        $this->registerAfterTestCallback(function () use ($path) {
-            if (file_exists($path)) {
-                unlink($path);
-            }
-        });
+        $this->tmpfiles[] = $path;
         return $path;
     }
 }

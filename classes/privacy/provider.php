@@ -26,6 +26,8 @@
 
 namespace local_grpcalendarimport\privacy;
 
+defined('MOODLE_INTERNAL') || die();
+
 /**
  * Privacy provider declaring that this plugin stores no personal data.
  */
