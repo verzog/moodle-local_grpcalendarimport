@@ -16,7 +16,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 3
@@ -43,18 +43,21 @@ jobs:
             database: pgsql
             db-user: postgres
             db-pass: postgres
+            db-port: 5432
           # Moodle 4.5 LTS — PHP 8.2 / mariadb
           - php: '8.2'
             moodle-branch: MOODLE_405_STABLE
             database: mariadb
             db-user: root
             db-pass: moodle
+            db-port: 3306
           # Moodle 4.5 LTS — PHP 8.3 / pgsql
           - php: '8.3'
             moodle-branch: MOODLE_405_STABLE
             database: pgsql
             db-user: postgres
             db-pass: postgres
+            db-port: 5432
 
     steps:
       - name: Check out plugin
@@ -81,7 +84,9 @@ jobs:
         run: |
           moodle-plugin-ci install \
             --plugin ./plugin \
+            --moodle /home/runner/work/moodle \
             --db-host=127.0.0.1 \
+            --db-port=${{ matrix.db-port }} \
             --db-type=${{ matrix.database }} \
             --db-user=${{ matrix.db-user }} \
             --db-pass=${{ matrix.db-pass }} \
@@ -100,11 +105,11 @@ jobs:
         continue-on-error: true
 
       - name: Moodle Code Checker (phpcs)
-        run: moodle-plugin-ci codechecker --max-warnings 0 ./plugin
+        run: moodle-plugin-ci codechecker ./plugin --max-warnings 0
         if: ${{ !cancelled() }}
 
       - name: Moodle PHPDoc Checker
-        run: moodle-plugin-ci phpdoc --max-warnings 0 ./plugin
+        run: moodle-plugin-ci phpdoc ./plugin --max-warnings 0
         if: ${{ !cancelled() }}
 
       - name: Validate plugin structure
@@ -115,6 +120,16 @@ jobs:
         run: moodle-plugin-ci savepoints ./plugin
         if: ${{ !cancelled() }}
 
+      - name: Install required locales
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y locales language-pack-en
+          sudo localedef -i en_AU -f UTF-8 en_AU.UTF-8
+          locale -a | grep en_AU
+
       - name: PHPUnit
-        run: moodle-plugin-ci phpunit --fail-on-warning ./plugin
+        run: moodle-plugin-ci phpunit ./plugin --fail-on-warning
         if: ${{ !cancelled() }}
+        env:
+          LANG: en_AU.UTF-8
+          LC_ALL: en_AU.UTF-8
