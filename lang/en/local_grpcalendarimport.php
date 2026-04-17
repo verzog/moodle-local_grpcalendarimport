@@ -30,6 +30,7 @@ $string['import_button']         = 'Import Events';
 $string['import_heading']        = 'Import Group Calendar Events';
 $string['pluginname']            = 'Calendar Group Event Importer';
 $string['pluginname_desc']       = 'Import group calendar events from a CSV file.';
+$string['privacy:metadata']      = 'This plugin does not directly store any personal data. Calendar events are stored in the core calendar system.';
 $string['results_heading']       = 'Import Results';
 $string['row']                   = 'Row';
 $string['status_error']          = 'Error';
