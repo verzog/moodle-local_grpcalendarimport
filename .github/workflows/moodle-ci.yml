@@ -130,3 +130,6 @@ jobs:
       - name: PHPUnit
         run: moodle-plugin-ci phpunit ./plugin --fail-on-warning
         if: ${{ !cancelled() }}
+        env:
+          LANG: en_AU.UTF-8
+          LC_ALL: en_AU.UTF-8

@@ -29,7 +29,7 @@
  * @copyright 2026 SCCA
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-final class local_grpcalendarimport_locallib_test extends advanced_testcase {
+final class locallib_test extends advanced_testcase {
     /**
      * Test parse_csv with basic CSV data.
      */
