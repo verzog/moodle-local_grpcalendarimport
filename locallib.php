@@ -30,6 +30,9 @@
  */
 function local_grpcalendarimport_parse_csv(string $filepath): array {
     $rows = [];
+    if (!is_readable($filepath)) {
+        return $rows;
+    }
     $handle = fopen($filepath, 'r');
     if (!$handle) {
         return $rows;
@@ -68,7 +71,8 @@ function local_grpcalendarimport_parse_csv(string $filepath): array {
  * @return array Result array with keys: row, status (ok|skip|error), message.
  */
 function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, int $rownum): array {
-    global $DB;
+    global $CFG, $DB;
+    require_once($CFG->dirroot . '/calendar/lib.php');
 
     $eventname      = trim($row['name'] ?? '');
     $courseid       = (int)($row['courseid'] ?? 0);
