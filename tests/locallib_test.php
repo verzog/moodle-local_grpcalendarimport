@@ -22,9 +22,7 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-namespace local_grpcalendarimport;
-
-use advanced_testcase;
+defined('MOODLE_INTERNAL') || die();
 
 /**
  * Unit test class for local_grpcalendarimport library functions.
@@ -33,7 +31,7 @@ use advanced_testcase;
  * @copyright 2026 SCCA
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-final class locallib_test extends advanced_testcase {
+final class local_grpcalendarimport_locallib_test extends advanced_testcase {
     /**
      * Test parse_csv with basic CSV data.
      */
@@ -47,7 +45,7 @@ final class locallib_test extends advanced_testcase {
         $tmpfile = tempnam(sys_get_temp_dir(), 'csv_');
         file_put_contents($tmpfile, $csvdata);
 
-        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+        $rows = local_grpcalendarimport_parse_csv($tmpfile);
 
         $this->assertCount(2, $rows);
         $this->assertEquals('Event 1', $rows[0]['name']);
@@ -69,7 +67,7 @@ final class locallib_test extends advanced_testcase {
         $tmpfile = tempnam(sys_get_temp_dir(), 'tsv_');
         file_put_contents($tmpfile, $tsvdata);
 
-        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+        $rows = local_grpcalendarimport_parse_csv($tmpfile);
 
         $this->assertCount(1, $rows);
         $this->assertEquals('Event 1', $rows[0]['name']);
@@ -90,7 +88,7 @@ final class locallib_test extends advanced_testcase {
         $tmpfile = tempnam(sys_get_temp_dir(), 'bom_');
         file_put_contents($tmpfile, $csvdata);
 
-        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+        $rows = local_grpcalendarimport_parse_csv($tmpfile);
 
         $this->assertCount(1, $rows);
         // BOM should be stripped from 'name' header.
@@ -111,7 +109,7 @@ final class locallib_test extends advanced_testcase {
         $tmpfile = tempnam(sys_get_temp_dir(), 'short_');
         file_put_contents($tmpfile, $csvdata);
 
-        $rows = \local_grpcalendarimport_parse_csv($tmpfile);
+        $rows = local_grpcalendarimport_parse_csv($tmpfile);
 
         $this->assertCount(1, $rows);
         $this->assertArrayHasKey('description', $rows[0]);
@@ -126,7 +124,7 @@ final class locallib_test extends advanced_testcase {
     public function test_parse_csv_invalid_path(): void {
         $this->resetAfterTest();
 
-        $rows = \local_grpcalendarimport_parse_csv('/nonexistent/path/to/file.csv');
+        $rows = local_grpcalendarimport_parse_csv('/nonexistent/path/to/file.csv');
 
         $this->assertEmpty($rows);
     }
@@ -144,7 +142,7 @@ final class locallib_test extends advanced_testcase {
             'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_create_event($row, false, 1);
+        $result = local_grpcalendarimport_create_event($row, false, 1);
 
         $this->assertEquals('error', $result['status']);
         $this->assertStringContainsString('Missing name', $result['message']);
@@ -163,7 +161,7 @@ final class locallib_test extends advanced_testcase {
             'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_create_event($row, false, 1);
+        $result = local_grpcalendarimport_create_event($row, false, 1);
 
         $this->assertEquals('error', $result['status']);
         $this->assertStringContainsString('Invalid or missing courseid', $result['message']);
@@ -182,7 +180,7 @@ final class locallib_test extends advanced_testcase {
             'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_create_event($row, false, 1);
+        $result = local_grpcalendarimport_create_event($row, false, 1);
 
         $this->assertEquals('error', $result['status']);
         $this->assertStringContainsString('Invalid or missing groupid', $result['message']);
@@ -201,7 +199,7 @@ final class locallib_test extends advanced_testcase {
             'timestart' => time(),
         ];
 
-        $result = \local_grpcalendarimport_create_event($row, false, 1);
+        $result = local_grpcalendarimport_create_event($row, false, 1);
 
         $this->assertEquals('error', $result['status']);
         $this->assertStringContainsString('not found', $result['message']);
@@ -230,7 +228,7 @@ final class locallib_test extends advanced_testcase {
             'eventtype' => 'group',
         ];
 
-        $result = \local_grpcalendarimport_create_event($row, false, 1);
+        $result = local_grpcalendarimport_create_event($row, false, 1);
 
         $this->assertEquals('ok', $result['status']);
         $this->assertStringContainsString('Created', $result['message']);
@@ -258,11 +256,11 @@ final class locallib_test extends advanced_testcase {
         ];
 
         // Create the first event.
-        $result1 = \local_grpcalendarimport_create_event($eventdata, false, 1);
+        $result1 = local_grpcalendarimport_create_event($eventdata, false, 1);
         $this->assertEquals('ok', $result1['status']);
 
         // Try to create duplicate with skipduplicates enabled.
-        $result2 = \local_grpcalendarimport_create_event($eventdata, true, 2);
+        $result2 = local_grpcalendarimport_create_event($eventdata, true, 2);
         $this->assertEquals('skip', $result2['status']);
         $this->assertStringContainsString('Duplicate skipped', $result2['message']);
     }
@@ -289,11 +287,11 @@ final class locallib_test extends advanced_testcase {
         ];
 
         // Create the first event.
-        $result1 = \local_grpcalendarimport_create_event($eventdata, false, 1);
+        $result1 = local_grpcalendarimport_create_event($eventdata, false, 1);
         $this->assertEquals('ok', $result1['status']);
 
         // Try to create duplicate with skipduplicates disabled.
-        $result2 = \local_grpcalendarimport_create_event($eventdata, false, 2);
+        $result2 = local_grpcalendarimport_create_event($eventdata, false, 2);
         $this->assertEquals('ok', $result2['status']);
     }
 }
