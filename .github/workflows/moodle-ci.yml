@@ -121,7 +121,11 @@ jobs:
         if: ${{ !cancelled() }}
 
       - name: Install required locales
-        run: sudo locale-gen en_AU.UTF-8 && sudo update-locale
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y locales
+          sudo locale-gen en_AU.UTF-8
+          sudo update-locale LANG=en_AU.UTF-8
 
       - name: PHPUnit
         run: moodle-plugin-ci phpunit ./plugin --fail-on-warning
