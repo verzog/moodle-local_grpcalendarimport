@@ -25,15 +25,20 @@
 defined('MOODLE_INTERNAL') || die();
 
 // Strings in alphabetical order as required by Moodle coding style.
-$string['calendarimport:manage'] = 'Import calendar events';
-$string['import_button']         = 'Import Events';
-$string['import_heading']        = 'Import Group Calendar Events';
-$string['pluginname']            = 'Calendar Group Event Importer';
-$string['pluginname_desc']       = 'Import group calendar events from a CSV file.';
-$string['privacy:metadata']      = 'This plugin does not directly store any personal data. Calendar events are stored in the core calendar system.';
-$string['results_heading']       = 'Import Results';
-$string['row']                   = 'Row';
-$string['status_error']          = 'Error';
-$string['status_ok']             = 'Created';
-$string['status_skip']           = 'Skipped (already exists)';
-$string['upload_csv']            = 'Upload CSV file';
+$string['event_message']              = 'Event Name / Message';
+$string['grpcalendarimport:manage']   = 'Import group calendar events';
+$string['import_button']              = 'Import Events';
+$string['import_heading']             = 'Import Group Calendar Events';
+$string['pluginname']                 = 'Calendar Group Event Importer';
+$string['pluginname_desc']            = 'Import group calendar events from a CSV file.';
+$string['privacy:metadata']           = 'This plugin does not directly store any personal data. Calendar events are stored in the core calendar system.';
+$string['results_heading']            = 'Import Results';
+$string['row']                        = 'Row';
+$string['skipduplicates']             = 'Skip duplicate events';
+$string['skipduplicates_desc']        = 'Skip if an event with the same name, course and timestart already exists';
+$string['status']                     = 'Status';
+$string['status_error']               = 'Error';
+$string['status_ok']                  = 'Created';
+$string['status_skip']                = 'Skipped (already exists)';
+$string['upload_csv']                 = 'Upload CSV file';
+$string['upload_error']               = 'Could not read uploaded file.';
