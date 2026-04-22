@@ -28,14 +28,11 @@ Checks: `phplint`, `phpmd`, `codechecker`, `phpdoc`, `validate`, `savepoints`, `
 Key fix: PostgreSQL Docker auto-creates a database named after `POSTGRES_USER`, so the workflow now uses the `postgres` superuser for pgsql and `root` for mariadb to avoid a "database already exists" conflict on install.
 
 ## Current state
-- Branch `claude/upload-moodle-plugin-e6oTw` is **5 commits ahead of main**
-- CI is passing codechecker (fixed inline comment full-stop warning in `version.php`)
-- A PR was attempted but failed — needs to be raised manually or retried
+- All code is on **main** — PRs #7 and #9 merged
+- CI passing on all 3 matrix jobs (PHP 8.1/8.2/8.3 × pgsql/mariadb)
+- PHPUnit test suite in `tests/locallib_test.php` covers parse_csv and create_event
 
 ## Next steps
-- [ ] Merge branch into main via PR
-- [ ] Confirm full CI green (all 3 matrix jobs pass)
 - [ ] Test plugin install on a real Moodle 4.5 instance
 - [ ] Upload to the Moodle Plugins Directory if required
-- [ ] Consider adding PHPUnit tests for `local_grpcalendarimport_parse_csv()` and `local_grpcalendarimport_create_event()`
 - [ ] Consider adding Behat tests for the upload form

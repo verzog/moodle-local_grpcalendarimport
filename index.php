@@ -72,8 +72,8 @@ class local_grpcalendarimport_form extends moodleform {
         $mform->addElement(
             'advcheckbox',
             'skipduplicates',
-            'Skip duplicate events',
-            'Skip if an event with the same name, course and timestart already exists',
+            get_string('skipduplicates', 'local_grpcalendarimport'),
+            get_string('skipduplicates_desc', 'local_grpcalendarimport'),
             [],
             [0, 1]
         );
@@ -97,7 +97,7 @@ if ($form->is_cancelled()) {
     $tmpfile = $form->save_temp_file('csvfile');
 
     if (!$tmpfile) {
-        \core\notification::error('Could not read uploaded file.');
+        \core\notification::error(get_string('upload_error', 'local_grpcalendarimport'));
     } else {
         $rows      = local_grpcalendarimport_parse_csv($tmpfile);
         $skipdupes = !empty($data->skipduplicates);
@@ -110,7 +110,7 @@ if ($form->is_cancelled()) {
             $counts[$result['status']]++;
             $rownum++;
         }
-        @unlink($tmpfile);
+        unlink($tmpfile);
 
         \core\notification::success(
             "Import complete — Created: {$counts['ok']}, Skipped: {$counts['skip']}, Errors: {$counts['error']}."
@@ -128,7 +128,11 @@ if (!empty($results)) {
     echo $OUTPUT->heading(get_string('results_heading', 'local_grpcalendarimport'), 3);
 
     $table             = new html_table();
-    $table->head       = ['Row', 'Event Name / Message', 'Status'];
+    $table->head       = [
+        get_string('row', 'local_grpcalendarimport'),
+        get_string('event_message', 'local_grpcalendarimport'),
+        get_string('status', 'local_grpcalendarimport'),
+    ];
     $table->attributes = ['class' => 'generaltable'];
 
     foreach ($results as $r) {
