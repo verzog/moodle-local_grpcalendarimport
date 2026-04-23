@@ -27,9 +27,9 @@ require_login();
 require_capability('local/grpcalendarimport:manage', context_system::instance());
 
 // Timestamps used in sample rows (all in 2026, future relative to plugin release).
-// 1746086400 = 2026-05-01 08:00 UTC
-// 1746172800 = 2026-05-02 08:00 UTC
-// 1748736000 = 2026-06-01 08:00 UTC
+// 1746086400 = 2026-05-01 08:00 UTC.
+// 1746172800 = 2026-05-02 08:00 UTC.
+// 1748736000 = 2026-06-01 08:00 UTC.
 $content = "name,courseid,groupid,timestart,timeduration,description,location,eventtype,visible\r\n"
          . "Team Meeting,2,5,1746086400,3600,Weekly sync,Room 101,group,1\r\n"
          . "Practice Session,2,6,1746172800,5400,Pre-game warmup,Field B,group,1\r\n"

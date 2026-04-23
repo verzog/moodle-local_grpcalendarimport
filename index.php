@@ -132,10 +132,10 @@ $reqtable->head = [
     'Description',
 ];
 $reqtable->data = [
-    [html_writer::tag('code', 'name'),      'Event title'],
-    [html_writer::tag('code', 'courseid'),  'Moodle course ID — visible in the course URL '
+    [html_writer::tag('code', 'name'), 'Event title'],
+    [html_writer::tag('code', 'courseid'), 'Moodle course ID — visible in the course URL '
         . '(e.g. ' . html_writer::tag('code', '/course/view.php?id=2') . ')'],
-    [html_writer::tag('code', 'groupid'),   'Moodle group ID — must belong to the course '
+    [html_writer::tag('code', 'groupid'), 'Moodle group ID — must belong to the course '
         . '(find via Course &rsaquo; Participants &rsaquo; Groups)'],
     [html_writer::tag('code', 'timestart'), 'Event start as a Unix timestamp '
         . '(e.g. ' . html_writer::tag('code', '1746086400') . ' = 2026-05-01 08:00 UTC)'],
@@ -149,11 +149,11 @@ $rectable->head = [
     get_string('default_value', 'local_grpcalendarimport'),
 ];
 $rectable->data = [
-    [html_writer::tag('code', 'timeduration'), 'Duration in seconds',     '3600 (1 hour)'],
-    [html_writer::tag('code', 'eventtype'),    'Calendar event type',     '"group"'],
-    [html_writer::tag('code', 'description'),  'Event description text',  '(empty)'],
-    [html_writer::tag('code', 'location'),     'Location string',         '(empty)'],
-    [html_writer::tag('code', 'visible'),      '1 = visible, 0 = hidden', '1'],
+    [html_writer::tag('code', 'timeduration'), 'Duration in seconds', '3600 (1 hour)'],
+    [html_writer::tag('code', 'eventtype'), 'Calendar event type', '"group"'],
+    [html_writer::tag('code', 'description'), 'Event description text', '(empty)'],
+    [html_writer::tag('code', 'location'), 'Location string', '(empty)'],
+    [html_writer::tag('code', 'visible'), '1 = visible, 0 = hidden', '1'],
 ];
 
 $opttable = new html_table();
@@ -163,11 +163,11 @@ $opttable->head = [
     'Description',
 ];
 $opttable->data = [
-    [html_writer::tag('code', 'categoryid'),     'Category ID'],
-    [html_writer::tag('code', 'userid'),         'User ID to associate with the event'],
-    [html_writer::tag('code', 'timesort'),       'Sort timestamp (defaults to timestart)'],
-    [html_writer::tag('code', 'uuid'),           'Unique identifier for external sync'],
-    [html_writer::tag('code', 'priority'),       'Display priority'],
+    [html_writer::tag('code', 'categoryid'), 'Category ID'],
+    [html_writer::tag('code', 'userid'), 'User ID to associate with the event'],
+    [html_writer::tag('code', 'timesort'), 'Sort timestamp (defaults to timestart)'],
+    [html_writer::tag('code', 'uuid'), 'Unique identifier for external sync'],
+    [html_writer::tag('code', 'priority'), 'Display priority'],
     [html_writer::tag('code', 'subscriptionid'), 'Calendar subscription ID'],
 ];
 
@@ -179,26 +179,39 @@ $samplecsv = implode("\n", [
 ]);
 
 $panelbody = html_writer::tag('p', get_string('csv_format_intro', 'local_grpcalendarimport'));
-$panelbody .= html_writer::tag('h6',
+$panelbody .= html_writer::tag(
+    'h6',
     get_string('required_columns', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']);
+    ['class' => 'fw-bold mt-3']
+);
 $panelbody .= html_writer::table($reqtable);
-$panelbody .= html_writer::tag('h6',
+$panelbody .= html_writer::tag(
+    'h6',
     get_string('recommended_columns', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']);
+    ['class' => 'fw-bold mt-3']
+);
 $panelbody .= html_writer::table($rectable);
-$panelbody .= html_writer::tag('h6',
+$panelbody .= html_writer::tag(
+    'h6',
     get_string('optional_columns', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']);
+    ['class' => 'fw-bold mt-3']
+);
 $panelbody .= html_writer::table($opttable);
-$panelbody .= html_writer::tag('h6',
+$panelbody .= html_writer::tag(
+    'h6',
     get_string('sample_csv_heading', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']);
-$panelbody .= html_writer::tag('pre', htmlspecialchars($samplecsv),
-    ['class' => 'bg-light p-2 border rounded small']);
-$panelbody .= html_writer::link($sampleurl,
+    ['class' => 'fw-bold mt-3']
+);
+$panelbody .= html_writer::tag(
+    'pre',
+    htmlspecialchars($samplecsv),
+    ['class' => 'bg-light p-2 border rounded small']
+);
+$panelbody .= html_writer::link(
+    $sampleurl,
     get_string('download_sample', 'local_grpcalendarimport'),
-    ['class' => 'btn btn-sm btn-outline-secondary']);
+    ['class' => 'btn btn-sm btn-outline-secondary']
+);
 
 $togglebtn = html_writer::tag(
     'button',
@@ -214,8 +227,11 @@ $togglebtn = html_writer::tag(
 );
 $cardheader = html_writer::div($togglebtn, 'card-header');
 $collapseinner = html_writer::div($panelbody, 'card-body');
-$collapsediv = html_writer::tag('div', $collapseinner,
-    ['class' => 'collapse show', 'id' => 'grpcalinstructions']);
+$collapsediv = html_writer::tag(
+    'div',
+    $collapseinner,
+    ['class' => 'collapse show', 'id' => 'grpcalinstructions']
+);
 echo html_writer::div($cardheader . $collapsediv, 'card mb-4');
 
 $form->display();
