@@ -25,15 +25,24 @@
 defined('MOODLE_INTERNAL') || die();
 
 // Strings in alphabetical order as required by Moodle coding style.
+$string['csv_format_intro']           = 'Upload a comma- or tab-delimited file with a header row. Columns can be in any order. UTF-8 and UTF-8-BOM encodings are both accepted.';
+$string['default_value']              = 'Default';
+$string['description_column']         = 'Column';
+$string['download_sample']            = 'Download sample CSV';
 $string['event_message']              = 'Event Name / Message';
 $string['grpcalendarimport:manage']   = 'Import group calendar events';
 $string['import_button']              = 'Import Events';
 $string['import_heading']             = 'Import Group Calendar Events';
+$string['instructions_heading']       = 'Instructions';
+$string['optional_columns']           = 'Optional columns';
 $string['pluginname']                 = 'Calendar Group Event Importer';
 $string['pluginname_desc']            = 'Import group calendar events from a CSV file.';
 $string['privacy:metadata']           = 'This plugin does not directly store any personal data. Calendar events are stored in the core calendar system.';
+$string['recommended_columns']        = 'Recommended columns';
+$string['required_columns']           = 'Required columns';
 $string['results_heading']            = 'Import Results';
 $string['row']                        = 'Row';
+$string['sample_csv_heading']         = 'Example CSV';
 $string['skipduplicates']             = 'Skip duplicate events';
 $string['skipduplicates_desc']        = 'Skip if an event with the same name, course and timestart already exists';
 $string['status']                     = 'Status';
