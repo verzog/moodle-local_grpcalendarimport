@@ -328,6 +328,18 @@ final class locallib_test extends \advanced_testcase {
     }
 
     /**
+     * Test that the tab delimiter is detected when the file starts with blank lines.
+     */
+    public function test_parse_csv_tsv_with_leading_blank_lines(): void {
+        $headers = null;
+        $rows = $this->parse_string("\n\r\n\t\t\nname\tcourseid\tgroupid\ttimestart\nEvent 1\t1\t1\t1700000000\n", $headers);
+
+        $this->assertSame([], \local_grpcalendarimport_missing_columns($headers));
+        $this->assertCount(1, $rows);
+        $this->assertEquals('Event 1', $rows[0]['name']);
+    }
+
+    /**
      * Test that header names are lower-cased and returned to the caller.
      */
     public function test_parse_csv_headers_lowercased(): void {

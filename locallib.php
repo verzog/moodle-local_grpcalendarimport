@@ -43,8 +43,10 @@ function local_grpcalendarimport_parse_csv(string $filepath, ?array &$headers = 
         return $rows;
     }
 
-    // Detect delimiter from the first line.
-    $firstline = fgets($handle);
+    // Detect delimiter from the first non-blank line (the header), skipping blank or delimiter-only lines.
+    do {
+        $firstline = fgets($handle);
+    } while ($firstline !== false && trim($firstline, " \t\r\n\0\x0B,") === '');
     if ($firstline === false) {
         fclose($handle);
         return $rows;
