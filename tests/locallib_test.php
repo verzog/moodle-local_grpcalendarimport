@@ -425,7 +425,7 @@ final class locallib_test extends \advanced_testcase {
         $result = \local_grpcalendarimport_create_event($row, true, 1);
         $this->assertEquals('ok', $result['status']);
 
-        $event = $DB->get_record('event', ['name' => 'Blank cells'], '*', MUST_EXIST);
+        $event = $DB->get_record('event', ['courseid' => $course->id, 'groupid' => $group->id], '*', MUST_EXIST);
         $this->assertEquals(1, $event->visible);
         $this->assertEquals(3600, $event->timeduration);
         $this->assertEquals('group', $event->eventtype);
@@ -487,7 +487,7 @@ final class locallib_test extends \advanced_testcase {
         $result = \local_grpcalendarimport_create_event($row, false, 1);
         $this->assertEquals('ok', $result['status']);
 
-        $event = $DB->get_record('event', ['name' => 'Internal fields'], '*', MUST_EXIST);
+        $event = $DB->get_record('event', ['courseid' => $course->id, 'groupid' => $group->id], '*', MUST_EXIST);
         $this->assertEmpty($event->component);
         $this->assertEmpty($event->modulename);
         $this->assertEquals(0, $event->instance);
