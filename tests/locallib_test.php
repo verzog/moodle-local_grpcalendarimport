@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  * Unit tests for local_grpcalendarimport library functions.
  *
  * @package   local_grpcalendarimport
- * @copyright 2026 SCCA
+ * @copyright 2026 Vernon Spain
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -32,7 +32,7 @@ require_once(__DIR__ . '/../locallib.php');
  * Unit test class for local_grpcalendarimport library functions.
  *
  * @package   local_grpcalendarimport
- * @copyright 2026 SCCA
+ * @copyright 2026 Vernon Spain
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class locallib_test extends \advanced_testcase {

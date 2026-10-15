@@ -1,0 +1,38 @@
+name: Release zip
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      COMPONENT: local_grpcalendarimport
+      PLUGINDIR: grpcalendarimport
+
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Check the tag matches $plugin->release in version.php
+        run: |
+          RELEASE=$(sed -nE "s/^\\\$plugin->release\s*=\s*'([^']+)'.*/\1/p" version.php)
+          echo "Tag: $TAG, version.php release: $RELEASE"
+          if [ "$TAG" != "$RELEASE" ]; then
+            echo "::error::Release tag '$TAG' does not match \$plugin->release '$RELEASE' in version.php."
+            exit 1
+          fi
+
+      - name: Build the plugin zip
+        run: git archive --format=zip --prefix="$PLUGINDIR/" -o "$COMPONENT-$TAG.zip" "$TAG"
+
+      - name: Attach the zip to the release
+        run: gh release upload "$TAG" "$COMPONENT-$TAG.zip" --clobber

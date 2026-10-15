@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@
  * Recommended: timeduration, description, location, visible, eventtype
  *
  * @package   local_grpcalendarimport
- * @copyright 2026 SCCA
+ * @copyright 2026 Vernon Spain
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -44,7 +44,7 @@ require_capability('local/grpcalendarimport:manage', context_system::instance())
  * Form for uploading a CSV file of calendar events.
  *
  * @package   local_grpcalendarimport
- * @copyright 2026 SCCA
+ * @copyright 2026 Vernon Spain
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class local_grpcalendarimport_form extends moodleform {
