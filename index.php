@@ -99,22 +99,30 @@ if ($form->is_cancelled()) {
     if (!$tmpfile) {
         \core\notification::error(get_string('upload_error', 'local_grpcalendarimport'));
     } else {
-        $rows      = local_grpcalendarimport_parse_csv($tmpfile);
+        $headers   = [];
+        $rows      = local_grpcalendarimport_parse_csv($tmpfile, $headers);
+        $missing   = local_grpcalendarimport_missing_columns($headers);
         $skipdupes = !empty($data->skipduplicates);
         $rownum    = 1;
         $counts    = ['ok' => 0, 'skip' => 0, 'error' => 0];
-
-        foreach ($rows as $row) {
-            $result    = local_grpcalendarimport_create_event($row, $skipdupes, $rownum);
-            $results[] = $result;
-            $counts[$result['status']]++;
-            $rownum++;
-        }
         unlink($tmpfile);
 
-        \core\notification::success(
-            "Import complete — Created: {$counts['ok']}, Skipped: {$counts['skip']}, Errors: {$counts['error']}."
-        );
+        if (!empty($missing)) {
+            \core\notification::error(get_string('error_missingcolumns', 'local_grpcalendarimport', implode(', ', $missing)));
+        } else if (empty($rows)) {
+            \core\notification::error(get_string('error_norows', 'local_grpcalendarimport'));
+        } else {
+            foreach ($rows as $row) {
+                $result    = local_grpcalendarimport_create_event($row, $skipdupes, $rownum);
+                $results[] = $result;
+                $counts[$result['status']]++;
+                $rownum++;
+            }
+
+            \core\notification::success(
+                "Import complete — Created: {$counts['ok']}, Skipped: {$counts['skip']}, Errors: {$counts['error']}."
+            );
+        }
     }
 }
 
@@ -138,7 +146,7 @@ $reqtable->data = [
     [html_writer::tag('code', 'groupid'), 'Moodle group ID — must belong to the course '
         . '(find via Course &rsaquo; Participants &rsaquo; Groups)'],
     [html_writer::tag('code', 'timestart'), 'Event start as a Unix timestamp '
-        . '(e.g. ' . html_writer::tag('code', '1746086400') . ' = 2026-05-01 08:00 UTC)'],
+        . '(e.g. ' . html_writer::tag('code', '1809298800') . ' = 03/05/2027 09:00 Sydney time)'],
 ];
 
 $rectable = new html_table();
@@ -150,7 +158,7 @@ $rectable->head = [
 ];
 $rectable->data = [
     [html_writer::tag('code', 'timeduration'), 'Duration in seconds', '3600 (1 hour)'],
-    [html_writer::tag('code', 'eventtype'), 'Calendar event type', '"group"'],
+    [html_writer::tag('code', 'eventtype'), 'Calendar event type (only "group" is accepted)', '"group"'],
     [html_writer::tag('code', 'description'), 'Event description text', '(empty)'],
     [html_writer::tag('code', 'location'), 'Location string', '(empty)'],
     [html_writer::tag('code', 'visible'), '1 = visible, 0 = hidden', '1'],
@@ -168,14 +176,13 @@ $opttable->data = [
     [html_writer::tag('code', 'timesort'), 'Sort timestamp (defaults to timestart)'],
     [html_writer::tag('code', 'uuid'), 'Unique identifier for external sync'],
     [html_writer::tag('code', 'priority'), 'Display priority'],
-    [html_writer::tag('code', 'subscriptionid'), 'Calendar subscription ID'],
 ];
 
 $samplecsv = implode("\n", [
     'name,courseid,groupid,timestart,timeduration,description,location,eventtype,visible',
-    'Team Meeting,2,5,1746086400,3600,Weekly sync,Room 101,group,1',
-    'Practice Session,2,6,1746172800,5400,Pre-game warmup,Field B,group,1',
-    'Championship Race,3,7,1748736000,7200,Regional finals,Track A,group,1',
+    'Team Meeting,2,5,1809298800,3600,Weekly sync,Room 101,group,1',
+    'Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B,group,1',
+    'Championship Race,3,7,1812326400,7200,Regional finals,Track A,group,1',
 ]);
 
 $panelbody = html_writer::tag('p', get_string('csv_format_intro', 'local_grpcalendarimport'));

@@ -26,14 +26,14 @@ require_once(__DIR__ . '/../../config.php');
 require_login();
 require_capability('local/grpcalendarimport:manage', context_system::instance());
 
-// Timestamps used in sample rows (all in 2026, future relative to plugin release).
-// 1746086400 = 2026-05-01 08:00 UTC.
-// 1746172800 = 2026-05-02 08:00 UTC.
-// 1748736000 = 2026-06-01 08:00 UTC.
+// Timestamps used in sample rows (Australia/Sydney time).
+// 1809298800 = 03/05/2027 09:00 AEST.
+// 1809410400 = 04/05/2027 16:00 AEST.
+// 1812326400 = 07/06/2027 10:00 AEST.
 $content = "name,courseid,groupid,timestart,timeduration,description,location,eventtype,visible\r\n"
-         . "Team Meeting,2,5,1746086400,3600,Weekly sync,Room 101,group,1\r\n"
-         . "Practice Session,2,6,1746172800,5400,Pre-game warmup,Field B,group,1\r\n"
-         . "Championship Race,3,7,1748736000,7200,Regional finals,Track A,group,1\r\n";
+         . "Team Meeting,2,5,1809298800,3600,Weekly sync,Room 101,group,1\r\n"
+         . "Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B,group,1\r\n"
+         . "Championship Race,3,7,1812326400,7200,Regional finals,Track A,group,1\r\n";
 
 header('Content-Type: text/csv; charset=utf-8');
 header('Content-Disposition: attachment; filename="grp_calendar_sample.csv"');
