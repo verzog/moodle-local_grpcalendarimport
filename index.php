@@ -17,14 +17,9 @@
 /**
  * Import group calendar events from a CSV file.
  *
- * Expected CSV columns match the Moodle {event} table fields:
- *   id, name, description, categoryid, courseid, groupid, userid,
- *   repeatid, component, modulename, instance, type, eventtype,
- *   timestart, timeduration, timesort, visible, uuid, sequence,
- *   timemodified, subscriptionid, priority, location
- *
- * Required: name, courseid, groupid, timestart
- * Recommended: timeduration, description, location, visible, eventtype
+ * Required columns: name, courseid, groupid, timestart.
+ * Recommended: timeduration, description, location, visible, eventtype.
+ * Optional: categoryid, userid, timesort, uuid, sequence, priority.
  *
  * @package   local_grpcalendarimport
  * @copyright 2026 Vernon Spain
@@ -33,61 +28,17 @@
 
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
-require_once($CFG->libdir . '/formslib.php');
 require_once(__DIR__ . '/locallib.php');
 
 admin_externalpage_setup('local_grpcalendarimport');
 require_capability('local/grpcalendarimport:manage', context_system::instance());
-
-// Upload form definition.
-/**
- * Form for uploading a CSV file of calendar events.
- *
- * @package   local_grpcalendarimport
- * @copyright 2026 Vernon Spain
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- */
-class local_grpcalendarimport_form extends moodleform {
-    /**
-     * Define the form fields.
-     */
-    public function definition() {
-        $mform = $this->_form;
-        $mform->addElement(
-            'header',
-            'importheader',
-            get_string('import_heading', 'local_grpcalendarimport')
-        );
-        $mform->addElement(
-            'filepicker',
-            'csvfile',
-            get_string('upload_csv', 'local_grpcalendarimport'),
-            null,
-            [
-                'accepted_types' => ['.csv', '.txt', '.tsv'],
-                'maxbytes'       => 5 * 1024 * 1024,
-            ]
-        );
-        $mform->addRule('csvfile', null, 'required');
-        $mform->addElement(
-            'advcheckbox',
-            'skipduplicates',
-            get_string('skipduplicates', 'local_grpcalendarimport'),
-            get_string('skipduplicates_desc', 'local_grpcalendarimport'),
-            [],
-            [0, 1]
-        );
-        $mform->setDefault('skipduplicates', 1);
-        $this->add_action_buttons(false, get_string('import_button', 'local_grpcalendarimport'));
-    }
-}
 
 // Page setup.
 $PAGE->set_url(new moodle_url('/local/grpcalendarimport/index.php'));
 $PAGE->set_title(get_string('import_heading', 'local_grpcalendarimport'));
 $PAGE->set_heading(get_string('import_heading', 'local_grpcalendarimport'));
 
-$form    = new local_grpcalendarimport_form();
+$form    = new \local_grpcalendarimport\form\import_form();
 $results = [];
 
 if ($form->is_cancelled()) {
@@ -99,22 +50,28 @@ if ($form->is_cancelled()) {
     if (!$tmpfile) {
         \core\notification::error(get_string('upload_error', 'local_grpcalendarimport'));
     } else {
-        $rows      = local_grpcalendarimport_parse_csv($tmpfile);
+        $headers   = [];
+        $rows      = local_grpcalendarimport_parse_csv($tmpfile, $headers);
+        $missing   = local_grpcalendarimport_missing_columns($headers);
         $skipdupes = !empty($data->skipduplicates);
         $rownum    = 1;
         $counts    = ['ok' => 0, 'skip' => 0, 'error' => 0];
-
-        foreach ($rows as $row) {
-            $result    = local_grpcalendarimport_create_event($row, $skipdupes, $rownum);
-            $results[] = $result;
-            $counts[$result['status']]++;
-            $rownum++;
-        }
         unlink($tmpfile);
 
-        \core\notification::success(
-            "Import complete — Created: {$counts['ok']}, Skipped: {$counts['skip']}, Errors: {$counts['error']}."
-        );
+        if (!empty($missing)) {
+            \core\notification::error(get_string('error_missingcolumns', 'local_grpcalendarimport', implode(', ', $missing)));
+        } else if (empty($rows)) {
+            \core\notification::error(get_string('error_norows', 'local_grpcalendarimport'));
+        } else {
+            foreach ($rows as $row) {
+                $result    = local_grpcalendarimport_create_event($row, $skipdupes, $rownum);
+                $results[] = $result;
+                $counts[$result['status']]++;
+                $rownum++;
+            }
+
+            \core\notification::success(get_string('import_summary', 'local_grpcalendarimport', (object)$counts));
+        }
     }
 }
 
@@ -122,89 +79,70 @@ if ($form->is_cancelled()) {
 echo $OUTPUT->header();
 echo $OUTPUT->heading(get_string('import_heading', 'local_grpcalendarimport'));
 
-// Instructions panel (collapsed by default; expands on click).
+// Instructions panel (expanded by default; collapses on click).
 $sampleurl = new moodle_url('/local/grpcalendarimport/download.php');
+$code = function (string $text): string {
+    return html_writer::tag('code', s($text));
+};
+$coldesc = function (string $column, $a = null): string {
+    return get_string('coldesc_' . $column, 'local_grpcalendarimport', $a);
+};
+$columnheading = get_string('description_column', 'local_grpcalendarimport');
+$descheading = get_string('description_heading', 'local_grpcalendarimport');
+$tableclass = ['class' => 'table table-sm table-bordered mb-3'];
 
+$example = 1809298800;
 $reqtable = new html_table();
-$reqtable->attributes = ['class' => 'table table-sm table-bordered mb-3'];
-$reqtable->head = [
-    get_string('description_column', 'local_grpcalendarimport'),
-    'Description',
-];
+$reqtable->attributes = $tableclass;
+$reqtable->head = [$columnheading, $descheading];
 $reqtable->data = [
-    [html_writer::tag('code', 'name'), 'Event title'],
-    [html_writer::tag('code', 'courseid'), 'Moodle course ID — visible in the course URL '
-        . '(e.g. ' . html_writer::tag('code', '/course/view.php?id=2') . ')'],
-    [html_writer::tag('code', 'groupid'), 'Moodle group ID — must belong to the course '
-        . '(find via Course &rsaquo; Participants &rsaquo; Groups)'],
-    [html_writer::tag('code', 'timestart'), 'Event start as a Unix timestamp '
-        . '(e.g. ' . html_writer::tag('code', '1746086400') . ' = 2026-05-01 08:00 UTC)'],
+    [$code('name'), $coldesc('name')],
+    [$code('courseid'), $coldesc('courseid', $code('/course/view.php?id=2'))],
+    [$code('groupid'), $coldesc('groupid')],
+    [
+        $code('timestart'),
+        $coldesc('timestart', (object)[
+            'timestamp' => $code((string)$example),
+            'date' => userdate($example, '%d/%m/%Y %H:%M'),
+        ]),
+    ],
 ];
 
+$empty = get_string('default_empty', 'local_grpcalendarimport');
 $rectable = new html_table();
-$rectable->attributes = ['class' => 'table table-sm table-bordered mb-3'];
-$rectable->head = [
-    get_string('description_column', 'local_grpcalendarimport'),
-    'Description',
-    get_string('default_value', 'local_grpcalendarimport'),
-];
+$rectable->attributes = $tableclass;
+$rectable->head = [$columnheading, $descheading, get_string('default_value', 'local_grpcalendarimport')];
 $rectable->data = [
-    [html_writer::tag('code', 'timeduration'), 'Duration in seconds', '3600 (1 hour)'],
-    [html_writer::tag('code', 'eventtype'), 'Calendar event type', '"group"'],
-    [html_writer::tag('code', 'description'), 'Event description text', '(empty)'],
-    [html_writer::tag('code', 'location'), 'Location string', '(empty)'],
-    [html_writer::tag('code', 'visible'), '1 = visible, 0 = hidden', '1'],
+    [$code('timeduration'), $coldesc('timeduration'), get_string('default_timeduration', 'local_grpcalendarimport')],
+    [$code('eventtype'), $coldesc('eventtype'), $code('group')],
+    [$code('description'), $coldesc('description'), $empty],
+    [$code('location'), $coldesc('location'), $empty],
+    [$code('visible'), $coldesc('visible'), $code('1')],
 ];
 
 $opttable = new html_table();
-$opttable->attributes = ['class' => 'table table-sm table-bordered mb-3'];
-$opttable->head = [
-    get_string('description_column', 'local_grpcalendarimport'),
-    'Description',
-];
-$opttable->data = [
-    [html_writer::tag('code', 'categoryid'), 'Category ID'],
-    [html_writer::tag('code', 'userid'), 'User ID to associate with the event'],
-    [html_writer::tag('code', 'timesort'), 'Sort timestamp (defaults to timestart)'],
-    [html_writer::tag('code', 'uuid'), 'Unique identifier for external sync'],
-    [html_writer::tag('code', 'priority'), 'Display priority'],
-    [html_writer::tag('code', 'subscriptionid'), 'Calendar subscription ID'],
-];
+$opttable->attributes = $tableclass;
+$opttable->head = [$columnheading, $descheading];
+$opttable->data = [];
+foreach (['categoryid', 'userid', 'timesort', 'uuid', 'sequence', 'priority'] as $column) {
+    $opttable->data[] = [$code($column), $coldesc($column)];
+}
 
-$samplecsv = implode("\n", [
-    'name,courseid,groupid,timestart,timeduration,description,location,eventtype,visible',
-    'Team Meeting,2,5,1746086400,3600,Weekly sync,Room 101,group,1',
-    'Practice Session,2,6,1746172800,5400,Pre-game warmup,Field B,group,1',
-    'Championship Race,3,7,1748736000,7200,Regional finals,Track A,group,1',
-]);
+$sectionheading = function (string $identifier): string {
+    return html_writer::tag('h6', get_string($identifier, 'local_grpcalendarimport'), ['class' => 'fw-bold mt-3']);
+};
 
 $panelbody = html_writer::tag('p', get_string('csv_format_intro', 'local_grpcalendarimport'));
-$panelbody .= html_writer::tag(
-    'h6',
-    get_string('required_columns', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']
-);
+$panelbody .= $sectionheading('required_columns');
 $panelbody .= html_writer::table($reqtable);
-$panelbody .= html_writer::tag(
-    'h6',
-    get_string('recommended_columns', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']
-);
+$panelbody .= $sectionheading('recommended_columns');
 $panelbody .= html_writer::table($rectable);
-$panelbody .= html_writer::tag(
-    'h6',
-    get_string('optional_columns', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']
-);
+$panelbody .= $sectionheading('optional_columns');
 $panelbody .= html_writer::table($opttable);
-$panelbody .= html_writer::tag(
-    'h6',
-    get_string('sample_csv_heading', 'local_grpcalendarimport'),
-    ['class' => 'fw-bold mt-3']
-);
+$panelbody .= $sectionheading('sample_csv_heading');
 $panelbody .= html_writer::tag(
     'pre',
-    htmlspecialchars($samplecsv),
+    s(implode("\n", local_grpcalendarimport_sample_csv_lines())),
     ['class' => 'bg-light p-2 border rounded small']
 );
 $panelbody .= html_writer::link(
@@ -247,15 +185,17 @@ if (!empty($results)) {
     ];
     $table->attributes = ['class' => 'generaltable'];
 
+    $badgeclasses = [
+        'ok'    => 'badge bg-success',
+        'skip'  => 'badge bg-warning text-dark',
+        'error' => 'badge bg-danger',
+    ];
     foreach ($results as $r) {
-        if ($r['status'] === 'ok') {
-            $statuslabel = html_writer::tag('span', '&#x2714; Created', ['style' => 'color:green;font-weight:bold']);
-        } else if ($r['status'] === 'skip') {
-            $statuslabel = html_writer::tag('span', '&#x23ED; Skipped', ['style' => 'color:orange']);
-        } else {
-            $statuslabel = html_writer::tag('span', '&#x2716; Error', ['style' => 'color:red;font-weight:bold']);
-        }
-        $table->data[] = [$r['row'], htmlspecialchars($r['message']), $statuslabel];
+        $statuslabel = html_writer::span(
+            get_string('status_' . $r['status'], 'local_grpcalendarimport'),
+            $badgeclasses[$r['status']]
+        );
+        $table->data[] = [$r['row'], s($r['message']), $statuslabel];
     }
 
     echo html_writer::table($table);

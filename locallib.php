@@ -25,11 +25,16 @@
 /**
  * Parse a CSV or TSV file into an array of associative arrays keyed by header.
  *
+ * Header names are lower-cased and stripped of BOM and control characters.
+ * Blank lines are skipped.
+ *
  * @param string $filepath Absolute path to the uploaded file.
+ * @param array|null $headers Set to the normalised header names found in the file.
  * @return array Array of rows, each row is an associative array.
  */
-function local_grpcalendarimport_parse_csv(string $filepath): array {
+function local_grpcalendarimport_parse_csv(string $filepath, ?array &$headers = null): array {
     $rows = [];
+    $headers = [];
     if (!is_readable($filepath)) {
         return $rows;
     }
@@ -38,19 +43,30 @@ function local_grpcalendarimport_parse_csv(string $filepath): array {
         return $rows;
     }
 
-    // Detect delimiter from the first line.
-    $firstline = fgets($handle);
+    // Detect delimiter from the first non-blank line (the header), skipping blank or delimiter-only lines.
+    do {
+        $firstline = fgets($handle);
+    } while ($firstline !== false && trim($firstline, " \t\r\n\0\x0B,") === '');
+    if ($firstline === false) {
+        fclose($handle);
+        return $rows;
+    }
     rewind($handle);
     $delimiter = (substr_count($firstline, "\t") > substr_count($firstline, ',')) ? "\t" : ',';
 
-    $headers = null;
+    $headerfound = false;
     // The escape character is passed explicitly: relying on its default is deprecated in PHP 8.4.
     while (($line = fgetcsv($handle, 0, $delimiter, '"', '')) !== false) {
-        if ($headers === null) {
-            // Normalise headers: strip BOM and control characters.
+        // Skip blank lines, including lines that contain only delimiters.
+        if (trim(implode('', $line)) === '') {
+            continue;
+        }
+        if (!$headerfound) {
+            // Normalise headers: strip BOM and control characters, and lower-case.
             $headers = array_map(function ($h) {
-                return trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $h));
+                return strtolower(trim(preg_replace('/[\x00-\x1F\x80-\xFF]/', '', $h)));
             }, $line);
+            $headerfound = true;
             continue;
         }
         // Pad short rows to avoid array_combine mismatch.
@@ -61,6 +77,54 @@ function local_grpcalendarimport_parse_csv(string $filepath): array {
     }
     fclose($handle);
     return $rows;
+}
+
+/**
+ * Rows of the sample CSV shown on the import page and offered for download.
+ *
+ * Timestamps are 03/05/2027 09:00, 04/05/2027 16:00 and 07/06/2027 10:00, Australia/Sydney time.
+ *
+ * @return string[] CSV lines, header first, without line endings.
+ */
+function local_grpcalendarimport_sample_csv_lines(): array {
+    return [
+        'name,courseid,groupid,timestart,timeduration,description,location,eventtype,visible',
+        'Team Meeting,2,5,1809298800,3600,Weekly sync,Room 101,group,1',
+        'Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B,group,1',
+        'Championship Race,3,7,1812326400,7200,Regional finals,Track A,group,1',
+    ];
+}
+
+/**
+ * Columns that every import file must contain.
+ *
+ * @return string[]
+ */
+function local_grpcalendarimport_required_columns(): array {
+    return ['name', 'courseid', 'groupid', 'timestart'];
+}
+
+/**
+ * Work out which required columns are missing from a file's header row.
+ *
+ * @param string[] $headers Normalised header names, as returned by local_grpcalendarimport_parse_csv().
+ * @return string[] The missing column names, empty if none are missing.
+ */
+function local_grpcalendarimport_missing_columns(array $headers): array {
+    return array_values(array_diff(local_grpcalendarimport_required_columns(), $headers));
+}
+
+/**
+ * Read an integer column from a CSV row, treating a missing or blank cell as "use the default".
+ *
+ * @param array $row Associative array of CSV columns.
+ * @param string $column Column name.
+ * @param int|null $default Value to use when the cell is missing or blank.
+ * @return int|null
+ */
+function local_grpcalendarimport_int_column(array $row, string $column, ?int $default): ?int {
+    $value = trim((string)($row[$column] ?? ''));
+    return ($value === '') ? $default : (int)$value;
 }
 
 /**
@@ -75,50 +139,65 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
     global $CFG, $DB;
     require_once($CFG->dirroot . '/calendar/lib.php');
 
-    $eventname      = trim($row['name'] ?? '');
-    $courseid       = (int)($row['courseid'] ?? 0);
-    $groupid        = (int)($row['groupid'] ?? 0);
-    $timestart      = (int)($row['timestart'] ?? 0);
-    $duration       = (int)($row['timeduration'] ?? 3600);
-    $description    = trim($row['description'] ?? '');
-    $location       = trim($row['location'] ?? '');
-    $visible        = isset($row['visible']) ? (int)$row['visible'] : 1;
-    $eventtype      = trim($row['eventtype'] ?? 'group');
-    $uuid           = trim($row['uuid'] ?? '');
-    $sequence       = (int)($row['sequence'] ?? 1);
-    $priority       = (isset($row['priority']) && $row['priority'] !== '') ? (int)$row['priority'] : null;
-    $subscriptionid = (isset($row['subscriptionid']) && $row['subscriptionid'] !== '') ? (int)$row['subscriptionid'] : null;
-    $timesort       = (isset($row['timesort']) && $row['timesort'] !== '') ? (int)$row['timesort'] : $timestart;
-    $type           = (int)($row['type'] ?? 0);
-    $component      = trim($row['component'] ?? '');
-    $modulename     = trim($row['modulename'] ?? '');
-    $instance       = (int)($row['instance'] ?? 0);
-    $repeatid       = (int)($row['repeatid'] ?? 0);
-    $categoryid     = (int)($row['categoryid'] ?? 0);
-    $userid         = (int)($row['userid'] ?? 0);
+    $eventname   = trim($row['name'] ?? '');
+    $courseid    = local_grpcalendarimport_int_column($row, 'courseid', 0);
+    $groupid     = local_grpcalendarimport_int_column($row, 'groupid', 0);
+    $timestart   = local_grpcalendarimport_int_column($row, 'timestart', 0);
+    $duration    = local_grpcalendarimport_int_column($row, 'timeduration', 3600);
+    $description = trim($row['description'] ?? '');
+    $location    = trim($row['location'] ?? '');
+    $visible     = local_grpcalendarimport_int_column($row, 'visible', 1) ? 1 : 0;
+    $eventtype   = trim($row['eventtype'] ?? '');
+    $eventtype   = ($eventtype === '') ? 'group' : $eventtype;
+    $uuid        = trim($row['uuid'] ?? '');
+    $sequence    = local_grpcalendarimport_int_column($row, 'sequence', 1);
+    $priority    = local_grpcalendarimport_int_column($row, 'priority', null);
+    $timesort    = local_grpcalendarimport_int_column($row, 'timesort', $timestart);
+    $categoryid  = local_grpcalendarimport_int_column($row, 'categoryid', 0);
+    $userid      = local_grpcalendarimport_int_column($row, 'userid', 0);
 
     // Basic validation.
     if (empty($eventname)) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Missing name.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_missingname', 'local_grpcalendarimport')];
     }
     if ($courseid <= 0) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Invalid or missing courseid.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_courseid', 'local_grpcalendarimport')];
     }
     if ($groupid <= 0) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Invalid or missing groupid.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_groupid', 'local_grpcalendarimport')];
     }
     if ($timestart <= 0) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Invalid or missing timestart.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_timestart', 'local_grpcalendarimport')];
+    }
+    // This tool only creates group events; other types need fields that a CSV can't safely supply.
+    if ($eventtype !== 'group') {
+        return [
+            'row' => $rownum,
+            'status' => 'error',
+            'message' => get_string('error_eventtype', 'local_grpcalendarimport', $eventtype),
+        ];
     }
 
     // Verify course exists.
     if (!$DB->record_exists('course', ['id' => $courseid])) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => "Course ID $courseid not found."];
+        return [
+            'row' => $rownum,
+            'status' => 'error',
+            'message' => get_string('error_coursenotfound', 'local_grpcalendarimport', $courseid),
+        ];
     }
 
     // Verify group exists and belongs to this course.
     if (!$DB->record_exists('groups', ['id' => $groupid, 'courseid' => $courseid])) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => "Group ID $groupid not found in course $courseid."];
+        return [
+            'row' => $rownum,
+            'status' => 'error',
+            'message' => get_string(
+                'error_groupnotfound',
+                'local_grpcalendarimport',
+                ['groupid' => $groupid, 'courseid' => $courseid]
+            ),
+        ];
     }
 
     // Skip duplicate check using sql_compare_text() for TEXT column.
@@ -139,11 +218,16 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
         ];
         $exists = $DB->record_exists_sql($sql, $params);
         if ($exists) {
-            return ['row' => $rownum, 'status' => 'skip', 'message' => "Duplicate skipped: $eventname."];
+            return [
+                'row' => $rownum,
+                'status' => 'skip',
+                'message' => get_string('result_duplicate', 'local_grpcalendarimport', $eventname),
+            ];
         }
     }
 
-    // Build the event record using {event} table field names.
+    // Build the event record using {event} table field names. Fields that link an event to
+    // modules, subscriptions or repeat series are internal to Moodle and are not read from the CSV.
     $event = new stdClass();
     $event->name           = $eventname;
     $event->description    = $description;
@@ -152,12 +236,12 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
     $event->courseid       = $courseid;
     $event->groupid        = $groupid;
     $event->userid         = $userid;
-    $event->repeatid       = $repeatid;
-    $event->component      = $component;
-    $event->modulename     = $modulename;
-    $event->instance       = $instance;
-    $event->type           = $type;
-    $event->eventtype      = $eventtype ?: 'group';
+    $event->repeatid       = 0;
+    $event->component      = '';
+    $event->modulename     = '';
+    $event->instance       = 0;
+    $event->type           = CALENDAR_EVENT_TYPE_STANDARD;
+    $event->eventtype      = $eventtype;
     $event->timestart      = $timestart;
     $event->timeduration   = $duration;
     $event->timesort       = $timesort;
@@ -165,7 +249,7 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
     $event->uuid           = $uuid;
     $event->sequence       = $sequence;
     $event->timemodified   = time();
-    $event->subscriptionid = $subscriptionid;
+    $event->subscriptionid = null;
     $event->priority       = $priority;
     $event->location       = $location;
 
@@ -174,9 +258,17 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
         return [
             'row'     => $rownum,
             'status'  => 'ok',
-            'message' => "Created: \"$eventname\" (event ID {$calendarevent->id}).",
+            'message' => get_string(
+                'result_created',
+                'local_grpcalendarimport',
+                ['name' => $eventname, 'id' => $calendarevent->id]
+            ),
         ];
     } catch (Exception $e) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Exception: ' . $e->getMessage()];
+        return [
+            'row' => $rownum,
+            'status' => 'error',
+            'message' => get_string('error_exception', 'local_grpcalendarimport', $e->getMessage()),
+        ];
     }
 }

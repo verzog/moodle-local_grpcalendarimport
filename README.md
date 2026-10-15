@@ -68,16 +68,21 @@ The CSV must include a header row. Column names match the Moodle `{event}` table
 
 ### Optional columns
 
-`categoryid`, `userid`, `repeatid`, `component`, `modulename`, `instance`, `type`, `timesort`, `uuid`,
-`sequence`, `subscriptionid`, `priority`
+`categoryid`, `userid`, `timesort`, `uuid`, `sequence`, `priority`
+
+Column names are not case-sensitive. Any other columns are ignored, including internal `{event}` fields
+such as `component`, `modulename`, `instance`, `repeatid`, `type` and `subscriptionid`. Blank cells use
+the default value, and blank lines are skipped. Only `group` events can be imported.
 
 ### Example
 
 ```csv
 name,courseid,groupid,timestart,timeduration,description,location
-Team Meeting,2,5,1746000000,3600,Weekly sync,Room 101
-Practice Session,2,6,1746003600,5400,Pre-game warmup,Field B
+Team Meeting,2,5,1809298800,3600,Weekly sync,Room 101
+Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B
 ```
+
+`1809298800` is 03/05/2027 09:00 and `1809410400` is 04/05/2027 16:00, Australia/Sydney time.
 
 ## Permissions
 
