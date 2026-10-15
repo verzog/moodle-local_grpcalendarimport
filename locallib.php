@@ -78,6 +78,22 @@ function local_grpcalendarimport_parse_csv(string $filepath, ?array &$headers = 
 }
 
 /**
+ * Rows of the sample CSV shown on the import page and offered for download.
+ *
+ * Timestamps are 03/05/2027 09:00, 04/05/2027 16:00 and 07/06/2027 10:00, Australia/Sydney time.
+ *
+ * @return string[] CSV lines, header first, without line endings.
+ */
+function local_grpcalendarimport_sample_csv_lines(): array {
+    return [
+        'name,courseid,groupid,timestart,timeduration,description,location,eventtype,visible',
+        'Team Meeting,2,5,1809298800,3600,Weekly sync,Room 101,group,1',
+        'Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B,group,1',
+        'Championship Race,3,7,1812326400,7200,Regional finals,Track A,group,1',
+    ];
+}
+
+/**
  * Columns that every import file must contain.
  *
  * @return string[]
@@ -140,16 +156,16 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
 
     // Basic validation.
     if (empty($eventname)) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Missing name.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_missingname', 'local_grpcalendarimport')];
     }
     if ($courseid <= 0) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Invalid or missing courseid.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_courseid', 'local_grpcalendarimport')];
     }
     if ($groupid <= 0) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Invalid or missing groupid.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_groupid', 'local_grpcalendarimport')];
     }
     if ($timestart <= 0) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Invalid or missing timestart.'];
+        return ['row' => $rownum, 'status' => 'error', 'message' => get_string('error_timestart', 'local_grpcalendarimport')];
     }
     // This tool only creates group events; other types need fields that a CSV can't safely supply.
     if ($eventtype !== 'group') {
@@ -162,12 +178,24 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
 
     // Verify course exists.
     if (!$DB->record_exists('course', ['id' => $courseid])) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => "Course ID $courseid not found."];
+        return [
+            'row' => $rownum,
+            'status' => 'error',
+            'message' => get_string('error_coursenotfound', 'local_grpcalendarimport', $courseid),
+        ];
     }
 
     // Verify group exists and belongs to this course.
     if (!$DB->record_exists('groups', ['id' => $groupid, 'courseid' => $courseid])) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => "Group ID $groupid not found in course $courseid."];
+        return [
+            'row' => $rownum,
+            'status' => 'error',
+            'message' => get_string(
+                'error_groupnotfound',
+                'local_grpcalendarimport',
+                ['groupid' => $groupid, 'courseid' => $courseid]
+            ),
+        ];
     }
 
     // Skip duplicate check using sql_compare_text() for TEXT column.
@@ -188,7 +216,11 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
         ];
         $exists = $DB->record_exists_sql($sql, $params);
         if ($exists) {
-            return ['row' => $rownum, 'status' => 'skip', 'message' => "Duplicate skipped: $eventname."];
+            return [
+                'row' => $rownum,
+                'status' => 'skip',
+                'message' => get_string('result_duplicate', 'local_grpcalendarimport', $eventname),
+            ];
         }
     }
 
@@ -224,9 +256,17 @@ function local_grpcalendarimport_create_event(array $row, bool $skipduplicates, 
         return [
             'row'     => $rownum,
             'status'  => 'ok',
-            'message' => "Created: \"$eventname\" (event ID {$calendarevent->id}).",
+            'message' => get_string(
+                'result_created',
+                'local_grpcalendarimport',
+                ['name' => $eventname, 'id' => $calendarevent->id]
+            ),
         ];
     } catch (Exception $e) {
-        return ['row' => $rownum, 'status' => 'error', 'message' => 'Exception: ' . $e->getMessage()];
+        return [
+            'row' => $rownum,
+            'status' => 'error',
+            'message' => get_string('error_exception', 'local_grpcalendarimport', $e->getMessage()),
+        ];
     }
 }
