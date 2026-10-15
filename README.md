@@ -84,6 +84,22 @@ Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B
 
 `1809298800` is 03/05/2027 09:00 and `1809410400` is 04/05/2027 16:00, Australia/Sydney time.
 
+## For developers
+
+Other plugins can create group events through the `\local_grpcalendarimport\importer` class instead of
+the upload page. `tool_automate` uses it for its "Create group calendar event" action and its scheduled
+calendar CSV import.
+
+| Method | Purpose |
+|---|---|
+| `import_file($filepath, $skipduplicates)` | Import every row of a CSV or TSV file; returns counts and per-row results |
+| `create_event($row, $skipduplicates, $rownum)` | Create one event from a row keyed by the column names above |
+| `event_exists($name, $courseid, $groupid, $timestart, $eventtype)` | Duplicate check used by `create_event()` |
+| `parse_file($filepath, &$headers)` / `missing_columns($headers)` | Read and check a file without importing it |
+
+Check `class_exists('\local_grpcalendarimport\importer')` and `importer::API_VERSION` (currently `1`)
+before calling it. The class does no capability checks: callers must check their own.
+
 ## Permissions
 
 | Capability | Default role | Description |

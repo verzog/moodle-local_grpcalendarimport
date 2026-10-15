@@ -50,27 +50,14 @@ if ($form->is_cancelled()) {
     if (!$tmpfile) {
         \core\notification::error(get_string('upload_error', 'local_grpcalendarimport'));
     } else {
-        $headers   = [];
-        $rows      = local_grpcalendarimport_parse_csv($tmpfile, $headers);
-        $missing   = local_grpcalendarimport_missing_columns($headers);
-        $skipdupes = !empty($data->skipduplicates);
-        $rownum    = 1;
-        $counts    = ['ok' => 0, 'skip' => 0, 'error' => 0];
+        $outcome = \local_grpcalendarimport\importer::import_file($tmpfile, !empty($data->skipduplicates));
         unlink($tmpfile);
 
-        if (!empty($missing)) {
-            \core\notification::error(get_string('error_missingcolumns', 'local_grpcalendarimport', implode(', ', $missing)));
-        } else if (empty($rows)) {
-            \core\notification::error(get_string('error_norows', 'local_grpcalendarimport'));
+        if ($outcome['error'] !== '') {
+            \core\notification::error($outcome['error']);
         } else {
-            foreach ($rows as $row) {
-                $result    = local_grpcalendarimport_create_event($row, $skipdupes, $rownum);
-                $results[] = $result;
-                $counts[$result['status']]++;
-                $rownum++;
-            }
-
-            \core\notification::success(get_string('import_summary', 'local_grpcalendarimport', (object)$counts));
+            $results = $outcome['results'];
+            \core\notification::success(get_string('import_summary', 'local_grpcalendarimport', (object)$outcome['counts']));
         }
     }
 }
