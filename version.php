@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,14 +18,15 @@
  * Plugin version definition for local_grpcalendarimport.
  *
  * @package   local_grpcalendarimport
- * @copyright 2026 SCCA
+ * @copyright 2026 Vernon Spain
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_grpcalendarimport';
-$plugin->version   = 2026042401;
-$plugin->requires  = 2024100700; // Moodle 4.5.
+$plugin->version   = 2026101501;
+$plugin->requires  = 2025100600; // Moodle 5.1.
+$plugin->supported = [501, 503];
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.0.1';
+$plugin->release   = 'v1.1.0';

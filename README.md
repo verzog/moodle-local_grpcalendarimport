@@ -1,6 +1,7 @@
 # Calendar Group Event Importer (`local_grpcalendarimport`)
 
-A Moodle local plugin that lets administrators bulk-import group calendar events from a CSV or TSV file via a simple admin interface.
+A Moodle local plugin that lets administrators bulk-import group calendar events from a CSV or TSV
+file via a simple admin interface.
 
 ## Features
 
@@ -12,19 +13,37 @@ A Moodle local plugin that lets administrators bulk-import group calendar events
 
 ## Requirements
 
-- Moodle 4.5 or later (`requires = 2024100700`)
-- PHP 8.1+
+- Moodle 5.1 to 5.3 LTS (`requires = 2025100600`, `supported = [501, 503]`)
+- PHP 8.2 or later (Moodle 5.2 and 5.3 require PHP 8.3 or later)
 
-## Installation
+## Installing via uploaded ZIP file
 
-1. Download or clone this repository into your Moodle installation:
-   ```
-   /path/to/moodle/local/grpcalendarimport/
-   ```
-2. Log in to Moodle as an administrator and visit **Site administration → Notifications** to complete the install.
-3. The tool will appear under **Site administration → Tools → Import Group Calendar Events**.
+1. Download `local_grpcalendarimport-<version>.zip` from the
+   [Releases](https://github.com/verzog/moodle-local_grpcalendarimport/releases) page. Use the attached
+   plugin zip, not GitHub's "Source code (zip)", which has the wrong top-level folder name.
+2. Log in to your Moodle site as an admin and go to **Site administration → Plugins → Install plugins**.
+3. Upload the ZIP file. You should only be prompted to add extra details if your plugin type is not
+   automatically detected.
+4. Check the plugin validation report and finish the installation.
 
-## CSV Format
+## Installing manually
+
+The plugin can also be installed by putting the contents of this directory in
+
+    {your/moodle/dirroot}/public/local/grpcalendarimport
+
+From Moodle 5.1 the web root is the `public/` directory of the Moodle checkout.
+
+Afterwards, log in to your Moodle site as an admin and go to **Site administration → Notifications** to
+complete the installation. Alternatively, you can run
+
+    $ php admin/cli/upgrade.php
+
+to complete the installation from the command line.
+
+To find the tool, search **Site administration** for "Calendar Group Event Importer".
+
+## CSV format
 
 The CSV must include a header row. Column names match the Moodle `{event}` table fields.
 
@@ -49,7 +68,8 @@ The CSV must include a header row. Column names match the Moodle `{event}` table
 
 ### Optional columns
 
-`categoryid`, `userid`, `repeatid`, `component`, `modulename`, `instance`, `type`, `timesort`, `uuid`, `sequence`, `subscriptionid`, `priority`
+`categoryid`, `userid`, `repeatid`, `component`, `modulename`, `instance`, `type`, `timesort`, `uuid`,
+`sequence`, `subscriptionid`, `priority`
 
 ### Example
 
@@ -67,6 +87,15 @@ Practice Session,2,6,1746003600,5400,Pre-game warmup,Field B
 
 ## License
 
-GNU General Public License v3 or later — see [LICENSE](LICENSE).
+2026 Vernon Spain
 
-Copyright 2026 SCCA
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License as published by the Free Software Foundation, either version 3 of the License,
+or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public
+License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see
+<https://www.gnu.org/licenses/>.

@@ -1,5 +1,5 @@
 <?php
-// This file is part of Moodle - http://moodle.org/
+// This file is part of Moodle - https://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  * Local library functions for the GRP Calendar Import plugin.
  *
  * @package   local_grpcalendarimport
- * @copyright 2026 SCCA
+ * @copyright 2026 Vernon Spain
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
