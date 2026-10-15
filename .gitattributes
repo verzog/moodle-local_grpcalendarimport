@@ -4,5 +4,4 @@
 /.github export-ignore
 /.gitattributes export-ignore
 /.gitignore export-ignore
-/session-notes.md export-ignore
 /tests export-ignore
