@@ -131,6 +131,10 @@ final class importer_test extends \advanced_testcase {
             'iso with T' => ['2027-05-03T09:00', 1809298800],
             'surrounding spaces' => ['  03/05/2027 09:00 ', 1809298800],
             'daylight saving (AEDT)' => ['15/01/2027 09:00', 1799964000],
+            '12-hour AM' => ['3/05/2027 9:00 AM', 1809298800],
+            '12-hour lower-case, no space' => ['3/05/2027 9:00am', 1809298800],
+            '12-hour PM' => ['04/05/2027 4:00 PM', 1809410400],
+            '12-hour with seconds' => ['3/05/2027 9:00:00 AM', 1809298800],
         ];
     }
 

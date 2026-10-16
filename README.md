@@ -88,6 +88,7 @@ Practice Session,2,6,04/05/2027 16:00,5400,Pre-game warmup,Field B
 
 - `DD/MM/YYYY HH:MM`, e.g. `03/05/2027 09:00`. Seconds are optional, and the leading zeros on day, month and
   hour can be left out (`3/5/2027 9:00`).
+- 12-hour times with AM/PM, e.g. `3/05/2027 9:00 AM`, which is what spreadsheets often write when saving as CSV.
 - `DD/MM/YYYY` on its own means midnight.
 - `YYYY-MM-DD HH:MM`, the format some spreadsheets save dates in.
 - A Unix timestamp, e.g. `1809298800`.

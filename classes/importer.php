@@ -131,7 +131,7 @@ class importer {
     /**
      * Read a date and time, or a Unix timestamp, from a cell.
      *
-     * Accepted: a Unix timestamp; DD/MM/YYYY HH:MM (seconds optional); DD/MM/YYYY (midnight);
+     * Accepted: a Unix timestamp; DD/MM/YYYY HH:MM (seconds optional, or 12-hour with AM/PM); DD/MM/YYYY (midnight);
      * YYYY-MM-DD HH:MM (seconds optional, a "T" separator is allowed). Day, month and hour may drop
      * their leading zero. Dates are read in the given time zone, or the current user's if none is given.
      *
@@ -149,7 +149,11 @@ class importer {
         }
         $timezone = $timezone ?? \core_date::get_user_timezone_object();
         // A leading "!" resets fields the format doesn't set, so a date on its own means midnight.
-        $formats = ['!d/m/Y H:i', '!d/m/Y H:i:s', '!d/m/Y', '!Y-m-d H:i', '!Y-m-d H:i:s', '!Y-m-d\TH:i', '!Y-m-d\TH:i:s'];
+        // The 12-hour forms (9:00 AM, 9:00am) are what spreadsheets often write when saving as CSV.
+        $formats = [
+            '!d/m/Y H:i', '!d/m/Y H:i:s', '!d/m/Y g:i A', '!d/m/Y g:i:s A', '!d/m/Y g:iA', '!d/m/Y',
+            '!Y-m-d H:i', '!Y-m-d H:i:s', '!Y-m-d\TH:i', '!Y-m-d\TH:i:s',
+        ];
         foreach ($formats as $format) {
             $date = \DateTime::createFromFormat($format, $value, $timezone);
             if ($date === false) {
