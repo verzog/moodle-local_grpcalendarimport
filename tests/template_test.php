@@ -106,14 +106,72 @@ final class template_test extends \advanced_testcase {
     public function test_build_truncates(): void {
         $this->resetAfterTest();
         $generator = $this->getDataGenerator();
-        $course = $generator->create_course();
-        $generator->create_group(['courseid' => $course->id]);
-        $generator->create_group(['courseid' => $course->id]);
+        $courseids = [];
+        for ($c = 0; $c < 2; $c++) {
+            $course = $generator->create_course();
+            $generator->create_group(['courseid' => $course->id]);
+            $generator->create_group(['courseid' => $course->id]);
+            $courseids[] = $course->id;
+        }
+        $courses = template::find_courses(0, false, $courseids);
 
-        $outcome = template::build(template::find_courses(0, false, [$course->id]), 3, 4);
+        $outcome = template::build($courses, 3, 4);
 
         $this->assertCount(4, $outcome['rows']);
         $this->assertTrue($outcome['truncated']);
+        // Only the first course made it in, with both of its groups; the other course was cut off.
+        $this->assertEquals(1, $outcome['coursecount']);
+        $this->assertEquals(2, $outcome['groupcount']);
+
+        // A limit that ends exactly on a group boundary does not count the next group.
+        $outcome = template::build($courses, 3, 3);
+        $this->assertEquals(1, $outcome['coursecount']);
+        $this->assertEquals(1, $outcome['groupcount']);
+    }
+
+    /**
+     * Test that names a spreadsheet would read as a formula are quoted.
+     */
+    public function test_build_escapes_formula_names(): void {
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course(['fullname' => '=HYPERLINK("http://example.com")']);
+        $generator->create_group(['courseid' => $course->id, 'name' => '@SUM(1+1)']);
+
+        $row = template::build(template::find_courses(0, false, [$course->id]), 1)['rows'][0];
+
+        $this->assertEquals('\'=HYPERLINK("http://example.com")', $row['course_name']);
+        $this->assertEquals('\'@SUM(1+1)', $row['group_name']);
+    }
+
+    /**
+     * Test the formula escaping on its own.
+     *
+     * @param string $value Cell value.
+     * @param string $expected Expected result.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('escape_formula_provider')]
+    public function test_escape_formula(string $value, string $expected): void {
+        $this->assertSame($expected, template::escape_formula($value));
+    }
+
+    /**
+     * Cell values and their escaped form.
+     *
+     * @return array
+     */
+    public static function escape_formula_provider(): array {
+        return [
+            'plain' => ['Group A', 'Group A'],
+            'equals' => ['=1+1', "'=1+1"],
+            'plus' => ['+61 2 9999 9999', "'+61 2 9999 9999"],
+            'minus' => ['-5', "'-5"],
+            'at' => ['@me', "'@me"],
+            'leading space' => ['  =1', "'  =1"],
+            'single dash' => ['-', '-'],
+            'empty' => ['', ''],
+            'already quoted' => ["'=1", "'=1"],
+        ];
     }
 
     /**

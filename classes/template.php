@@ -94,12 +94,13 @@ class template {
      * @param \stdClass[] $courses Courses, as returned by find_courses().
      * @param int $eventspergroup Rows to create for each group.
      * @param int $maxrows Stop once this many rows have been built.
-     * @return array Keys: rows (each keyed by columns()), groupcount (int), nogroups (course id => course name),
-     *               truncated (bool, true when $maxrows was reached before every group was added).
+     * @return array Keys: rows (each keyed by columns()), coursecount and groupcount (int, courses and groups
+     *               with at least one row), nogroups (course id => course name), truncated (bool, true when
+     *               $maxrows was reached before every group was added).
      */
     public static function build(array $courses, int $eventspergroup, int $maxrows = self::MAX_ROWS): array {
         $eventspergroup = max(1, min($eventspergroup, self::MAX_EVENTS_PER_GROUP));
-        $outcome = ['rows' => [], 'groupcount' => 0, 'nogroups' => [], 'truncated' => false];
+        $outcome = ['rows' => [], 'coursecount' => 0, 'groupcount' => 0, 'nogroups' => [], 'truncated' => false];
 
         foreach ($courses as $course) {
             $context = \context_course::instance($course->id);
@@ -109,20 +110,28 @@ class template {
                 $outcome['nogroups'][$course->id] = $coursename;
                 continue;
             }
+            $coursecounted = false;
             foreach ($groups as $group) {
                 $groupname = format_string($group->name, true, ['context' => $context, 'escape' => false]);
-                $outcome['groupcount']++;
                 for ($i = 0; $i < $eventspergroup; $i++) {
                     if (count($outcome['rows']) >= $maxrows) {
                         $outcome['truncated'] = true;
                         return $outcome;
                     }
+                    // Count the course and group once their first row is in.
+                    if (!$coursecounted) {
+                        $outcome['coursecount']++;
+                        $coursecounted = true;
+                    }
+                    if ($i === 0) {
+                        $outcome['groupcount']++;
+                    }
                     $outcome['rows'][] = [
                         'name' => '',
                         'courseid' => $course->id,
-                        'course_name' => $coursename,
+                        'course_name' => self::escape_formula($coursename),
                         'groupid' => $group->id,
-                        'group_name' => $groupname,
+                        'group_name' => self::escape_formula($groupname),
                         'timestart' => '',
                         'timeduration' => 3600,
                         'description' => '',
@@ -134,5 +143,22 @@ class template {
             }
         }
         return $outcome;
+    }
+
+    /**
+     * Stop a spreadsheet treating a name as a formula, by putting a quote in front of =, +, - or @.
+     *
+     * Moodle 5.1.1 and later do this for CSV and Excel downloads too; the quote this adds stops core adding a
+     * second one, so the result is the same on every 5.1 release.
+     *
+     * @param string $value The cell value.
+     * @return string
+     */
+    public static function escape_formula(string $value): string {
+        $trimmed = ltrim($value);
+        if ($value === '-' || $trimmed === '' || !in_array($trimmed[0], ['=', '+', '-', '@'], true)) {
+            return $value;
+        }
+        return "'" . $value;
     }
 }
