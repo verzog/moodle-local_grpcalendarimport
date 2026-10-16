@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_grpcalendarimport';
-$plugin->version   = 2026101600;
+$plugin->version   = 2026101601;
 $plugin->requires  = 2025100600; // Moodle 5.1.
 $plugin->supported = [501, 503];
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = 'v1.2.0';
+$plugin->release   = 'v1.3.0';

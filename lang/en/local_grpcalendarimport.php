@@ -35,7 +35,7 @@ $string['coldesc_priority'] = 'Display priority';
 $string['coldesc_sequence'] = 'Revision number for external sync';
 $string['coldesc_timeduration'] = 'Duration in seconds';
 $string['coldesc_timesort'] = 'Sort timestamp (defaults to timestart)';
-$string['coldesc_timestart'] = 'Event start as a Unix timestamp (e.g. {$a->timestamp} = {$a->date} in your time zone)';
+$string['coldesc_timestart'] = 'Event start as DD/MM/YYYY HH:MM in your time zone (e.g. {$a->date}), or as a Unix timestamp (e.g. {$a->timestamp})';
 $string['coldesc_userid'] = 'User ID to associate with the event';
 $string['coldesc_uuid'] = 'Unique identifier for external sync';
 $string['coldesc_visible'] = '1 = visible, 0 = hidden';
@@ -56,6 +56,7 @@ $string['error_missingcolumns'] = 'The file is missing these required columns: {
 $string['error_missingname'] = 'Missing name.';
 $string['error_norows'] = 'The file has a header row but no events to import.';
 $string['error_timestart'] = 'Invalid or missing timestart.';
+$string['error_timestartformat'] = 'Could not read timestart "{$a}". Use DD/MM/YYYY HH:MM (for example 03/05/2027 09:00) or a Unix timestamp.';
 $string['event_message'] = 'Event name / message';
 $string['grpcalendarimport:manage'] = 'Import group calendar events';
 $string['import_button'] = 'Import events';

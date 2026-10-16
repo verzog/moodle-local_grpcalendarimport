@@ -54,7 +54,7 @@ The CSV must include a header row. Column names match the Moodle `{event}` table
 | `name` | Event title |
 | `courseid` | Moodle course ID |
 | `groupid` | Moodle group ID (must belong to the course) |
-| `timestart` | Unix timestamp for the event start time |
+| `timestart` | Event start: `DD/MM/YYYY HH:MM` in your time zone, or a Unix timestamp |
 
 ### Recommended columns
 
@@ -78,11 +78,22 @@ the default value, and blank lines are skipped. Only `group` events can be impor
 
 ```csv
 name,courseid,groupid,timestart,timeduration,description,location
-Team Meeting,2,5,1809298800,3600,Weekly sync,Room 101
-Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B
+Team Meeting,2,5,03/05/2027 09:00,3600,Weekly sync,Room 101
+Practice Session,2,6,04/05/2027 16:00,5400,Pre-game warmup,Field B
 ```
 
-`1809298800` is 03/05/2027 09:00 and `1809410400` is 04/05/2027 16:00, Australia/Sydney time.
+### Start times
+
+`timestart` accepts any of these. Dates are read in the time zone of the person uploading the file.
+
+- `DD/MM/YYYY HH:MM`, e.g. `03/05/2027 09:00`. Seconds are optional, and the leading zeros on day, month and
+  hour can be left out (`3/5/2027 9:00`).
+- `DD/MM/YYYY` on its own means midnight.
+- `YYYY-MM-DD HH:MM`, the format some spreadsheets save dates in.
+- A Unix timestamp, e.g. `1809298800`.
+
+Impossible dates such as `31/02/2027` are reported as errors rather than moved to the next month. The year
+must have four digits.
 
 ## For developers
 
@@ -96,6 +107,7 @@ calendar CSV import.
 | `create_event($row, $skipduplicates, $rownum)` | Create one event from a row keyed by the column names above |
 | `event_exists($name, $courseid, $groupid, $timestart, $eventtype)` | Duplicate check used by `create_event()` |
 | `parse_file($filepath, &$headers)` / `missing_columns($headers)` | Read and check a file without importing it |
+| `parse_time($value, $timezone = null)` | Read a start time in any accepted format; returns a timestamp or null |
 
 Check `class_exists('\local_grpcalendarimport\importer')` and `importer::API_VERSION` (currently `1`)
 before calling it. The class does no capability checks: callers must check their own.

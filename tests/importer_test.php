@@ -116,6 +116,109 @@ final class importer_test extends \advanced_testcase {
     }
 
     /**
+     * Cells that parse_time() should read, with the timestamp each should give in Australia/Sydney.
+     *
+     * @return array
+     */
+    public static function parse_time_valid_provider(): array {
+        return [
+            'timestamp' => ['1809298800', 1809298800],
+            'dd/mm/yyyy hh:mm' => ['03/05/2027 09:00', 1809298800],
+            'no leading zeros' => ['3/5/2027 9:00', 1809298800],
+            'with seconds' => ['03/05/2027 09:00:00', 1809298800],
+            'date only is midnight' => ['03/05/2027', 1809266400],
+            'iso' => ['2027-05-03 09:00', 1809298800],
+            'iso with T' => ['2027-05-03T09:00', 1809298800],
+            'surrounding spaces' => ['  03/05/2027 09:00 ', 1809298800],
+            'daylight saving (AEDT)' => ['15/01/2027 09:00', 1799964000],
+        ];
+    }
+
+    /**
+     * Test that valid dates and timestamps are read in the given time zone.
+     *
+     * @param string $value Cell value.
+     * @param int $expected Expected timestamp.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('parse_time_valid_provider')]
+    public function test_parse_time_valid(string $value, int $expected): void {
+        $this->assertSame($expected, importer::parse_time($value, new \DateTimeZone('Australia/Sydney')));
+    }
+
+    /**
+     * Cells that parse_time() should reject.
+     *
+     * @return array
+     */
+    public static function parse_time_invalid_provider(): array {
+        return [
+            'blank' => [''],
+            'words' => ['next Monday'],
+            'month 13' => ['03/13/2027 09:00'],
+            'no 31 February' => ['31/02/2027 09:00'],
+            'hour 25' => ['03/05/2027 25:00'],
+            'us order with time words' => ['May 3 2027 9am'],
+        ];
+    }
+
+    /**
+     * Test that unreadable or impossible dates give null rather than a rolled-over date.
+     *
+     * @param string $value Cell value.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('parse_time_invalid_provider')]
+    public function test_parse_time_invalid(string $value): void {
+        $this->assertNull(importer::parse_time($value, new \DateTimeZone('Australia/Sydney')));
+    }
+
+    /**
+     * Test that a date with no time zone given is read in the current user's time zone.
+     */
+    public function test_parse_time_uses_user_timezone(): void {
+        $this->resetAfterTest();
+        $this->setUser($this->getDataGenerator()->create_user(['timezone' => 'Australia/Perth']));
+
+        // 09:00 in Perth (UTC+8) is 01:00 UTC.
+        $this->assertSame(1809306000, importer::parse_time('03/05/2027 09:00'));
+    }
+
+    /**
+     * Test that create_event() accepts a DD/MM/YYYY HH:MM start time.
+     */
+    public function test_create_event_with_date(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setUser($this->getDataGenerator()->create_user(['timezone' => 'Australia/Sydney']));
+
+        $course = $this->getDataGenerator()->create_course();
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $row = ['name' => 'Dated', 'courseid' => $course->id, 'groupid' => $group->id, 'timestart' => '03/05/2027 09:00'];
+
+        $result = importer::create_event($row, false, 1);
+
+        $this->assertEquals('ok', $result['status']);
+        $event = $DB->get_record('event', ['courseid' => $course->id, 'groupid' => $group->id], '*', MUST_EXIST);
+        $this->assertEquals(1809298800, $event->timestart);
+        $this->assertEquals(1809298800, $event->timesort);
+    }
+
+    /**
+     * Test that an unreadable start time gives an error that quotes the cell.
+     */
+    public function test_create_event_bad_date(): void {
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $row = ['name' => 'Bad', 'courseid' => $course->id, 'groupid' => $group->id, 'timestart' => '31/02/2027 09:00'];
+
+        $result = importer::create_event($row, false, 1);
+
+        $this->assertEquals('error', $result['status']);
+        $this->assertEquals(get_string('error_timestartformat', 'local_grpcalendarimport', '31/02/2027 09:00'), $result['message']);
+    }
+
+    /**
      * Test that the API version is published for callers to check.
      */
     public function test_api_version(): void {
