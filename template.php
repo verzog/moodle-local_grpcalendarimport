@@ -99,7 +99,7 @@ if ($data = $form->get_data()) {
         $preview = implode('', $notifications);
     } else {
         $summary = (object)[
-            'courses' => count($courses) - count($outcome['nogroups']),
+            'courses' => $outcome['coursecount'],
             'groups' => $outcome['groupcount'],
             'rows' => count($outcome['rows']),
         ];
