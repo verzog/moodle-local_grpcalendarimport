@@ -41,7 +41,6 @@ $perpage = 50;
 
 if ($runid) {
     $run = $DB->get_record(import_log::RUN_TABLE, ['id' => $runid], '*', MUST_EXIST);
-    $failures = $DB->get_records(import_log::FAIL_TABLE, ['runid' => $run->id], 'rownum');
 
     // Download this run's failed rows: row number, error, then every column the rows had.
     if ($dataformat !== '') {
@@ -49,11 +48,15 @@ if ($runid) {
         if (!in_array($dataformat, ['csv', 'excel'], true)) {
             throw new moodle_exception('invalidparameter', 'debug');
         }
+        // Read the rows twice, a record at a time: once for the column names, once to write them out.
         $columns = [];
-        foreach ($failures as $failure) {
+        $rs = $DB->get_recordset(import_log::FAIL_TABLE, ['runid' => $run->id], '', 'id, rowdata');
+        foreach ($rs as $failure) {
             $columns += array_fill_keys(array_keys((array)json_decode((string)$failure->rowdata, true)), true);
         }
+        $rs->close();
         $columns = array_keys($columns);
+        $failures = $DB->get_recordset(import_log::FAIL_TABLE, ['runid' => $run->id], 'rownum, id');
         \core\dataformat::download_data(
             'import_failures_' . $run->id,
             $dataformat,
@@ -69,6 +72,7 @@ if ($runid) {
                 return $record;
             }
         );
+        $failures->close();
         die();
     }
 }
@@ -100,7 +104,10 @@ if ($runid) {
     }
     echo html_writer::table($summary);
 
-    if ($failures) {
+    // Failed rows are stored without a limit, so show them a page at a time.
+    $failcount = $DB->count_records(import_log::FAIL_TABLE, ['runid' => $run->id]);
+    if ($failcount) {
+        $failures = $DB->get_records(import_log::FAIL_TABLE, ['runid' => $run->id], 'rownum, id', '*', $page * $perpage, $perpage);
         echo $OUTPUT->heading(get_string('history_failures', $component), 3);
         foreach (['csv', 'excel'] as $format) {
             echo $OUTPUT->single_button(
@@ -129,6 +136,7 @@ if ($runid) {
             ];
         }
         echo html_writer::table($table);
+        echo $OUTPUT->paging_bar($failcount, $page, $perpage, new moodle_url($pageurl, ['id' => $run->id]));
     } else if (empty($run->fileerror)) {
         echo $OUTPUT->notification(get_string('history_nofailures', $component), \core\output\notification::NOTIFY_SUCCESS);
     }

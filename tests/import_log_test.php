@@ -176,4 +176,27 @@ final class import_log_test extends \advanced_testcase {
         ob_end_clean();
         $this->assertTrue($DB->record_exists(import_log::RUN_TABLE, ['id' => $new]));
     }
+
+    /**
+     * Test that old runs are deleted in batches until none are left, and newer runs are kept.
+     */
+    public function test_delete_older_than_in_batches(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $file = $this->temp_file("name,courseid,groupid,timestart\nBad,0,0,1809298800\n");
+        $old = [];
+        for ($i = 0; $i < 5; $i++) {
+            $old[] = importer::import_file($file, false)['runid'];
+        }
+        $new = importer::import_file($file, false)['runid'];
+        unlink($file);
+        [$insql, $params] = $DB->get_in_or_equal($old);
+        $DB->set_field_select(import_log::RUN_TABLE, 'timecreated', 1000, "id {$insql}", $params);
+
+        $this->assertEquals(5, import_log::delete_older_than(2000, 2));
+        $this->assertEquals(0, $DB->count_records_select(import_log::RUN_TABLE, "id {$insql}", $params));
+        $this->assertEquals(0, $DB->count_records_select(import_log::FAIL_TABLE, "runid {$insql}", $params));
+        $this->assertTrue($DB->record_exists(import_log::RUN_TABLE, ['id' => $new]));
+    }
 }

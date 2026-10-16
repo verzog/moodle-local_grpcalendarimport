@@ -43,6 +43,9 @@ class import_log {
     /** @var int Most "row failed" log events per run; every failure is still kept in the history. */
     public const MAX_ROW_EVENTS = 50;
 
+    /** @var int How many old runs the clean-up deletes per batch. */
+    public const DELETE_BATCH = 1000;
+
     /**
      * Record an import run, its failed rows, and the matching log events.
      *
@@ -140,12 +143,26 @@ class import_log {
      * Delete runs older than a given time.
      *
      * @param int $before Delete runs recorded before this timestamp.
+     * @param int $batch How many runs to fetch and delete at a time.
      * @return int How many runs were deleted.
      */
-    public static function delete_older_than(int $before): int {
+    public static function delete_older_than(int $before, int $batch = self::DELETE_BATCH): int {
         global $DB;
-        $runids = $DB->get_fieldset_select(self::RUN_TABLE, 'id', 'timecreated < :before', ['before' => $before]);
-        self::delete_runs($runids);
-        return count($runids);
+        // Work in batches so a large backlog never has to be held in memory at once.
+        $deleted = 0;
+        do {
+            $runids = array_keys($DB->get_records_select(
+                self::RUN_TABLE,
+                'timecreated < :before',
+                ['before' => $before],
+                'id',
+                'id',
+                0,
+                $batch
+            ));
+            self::delete_runs($runids);
+            $deleted += count($runids);
+        } while (count($runids) === $batch);
+        return $deleted;
     }
 }
