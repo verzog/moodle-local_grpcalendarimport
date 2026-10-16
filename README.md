@@ -82,6 +82,18 @@ Team Meeting,2,5,03/05/2027 09:00,3600,Weekly sync,Room 101
 Practice Session,2,6,04/05/2027 16:00,5400,Pre-game warmup,Field B
 ```
 
+### Prefilled templates
+
+Instead of looking up course and group IDs, use **Create a prefilled template** on the import page:
+
+1. Choose a category (optionally with its subcategories), specific courses, or both, and how many events each group needs.
+2. Click **Preview template**. The page shows how many courses, groups and rows the template will have. It warns you
+   about any courses that have no groups (they're left out) and if the template hits the limit of 5,000 rows.
+3. Download it as **CSV** or **Excel**. Each group has one row per event. `courseid` and `groupid` are filled in,
+   and `course_name` and `group_name` are next to them so you can see which is which.
+4. Fill in `name` and `timestart` for each row, then upload the file on the import page. Save an Excel template as
+   CSV first. The extra name columns are ignored when importing.
+
 ### Start times
 
 `timestart` accepts any of these. Dates are read in the time zone of the person uploading the file.
