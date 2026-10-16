@@ -135,7 +135,12 @@ $panelbody .= html_writer::tag(
 $panelbody .= html_writer::link(
     $sampleurl,
     get_string('download_sample', 'local_grpcalendarimport'),
-    ['class' => 'btn btn-sm btn-outline-secondary']
+    ['class' => 'btn btn-sm btn-outline-secondary me-2']
+);
+$panelbody .= html_writer::link(
+    new moodle_url('/local/grpcalendarimport/template.php'),
+    get_string('template_heading', 'local_grpcalendarimport'),
+    ['class' => 'btn btn-sm btn-outline-primary']
 );
 
 $togglebtn = html_writer::tag(
