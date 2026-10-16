@@ -39,16 +39,16 @@ function local_grpcalendarimport_parse_csv(string $filepath, ?array &$headers = 
 /**
  * Rows of the sample CSV shown on the import page and offered for download.
  *
- * Timestamps are 03/05/2027 09:00, 04/05/2027 16:00 and 07/06/2027 10:00, Australia/Sydney time.
+ * Start times are DD/MM/YYYY HH:MM, read in the uploading user's time zone.
  *
  * @return string[] CSV lines, header first, without line endings.
  */
 function local_grpcalendarimport_sample_csv_lines(): array {
     return [
         'name,courseid,groupid,timestart,timeduration,description,location,eventtype,visible',
-        'Team Meeting,2,5,1809298800,3600,Weekly sync,Room 101,group,1',
-        'Practice Session,2,6,1809410400,5400,Pre-game warmup,Field B,group,1',
-        'Championship Race,3,7,1812326400,7200,Regional finals,Track A,group,1',
+        'Team Meeting,2,5,03/05/2027 09:00,3600,Weekly sync,Room 101,group,1',
+        'Practice Session,2,6,04/05/2027 16:00,5400,Pre-game warmup,Field B,group,1',
+        'Championship Race,3,7,07/06/2027 10:00,7200,Regional finals,Track A,group,1',
     ];
 }
 

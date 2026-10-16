@@ -37,7 +37,7 @@ namespace local_grpcalendarimport;
  */
 class importer {
     /** @var int Version of this API. Raised only when a public method changes in a breaking way. */
-    const API_VERSION = 1;
+    public const API_VERSION = 1;
 
     /**
      * Parse a CSV or TSV file into an array of associative arrays keyed by header.
@@ -129,6 +129,65 @@ class importer {
     }
 
     /**
+     * Read a date and time, or a Unix timestamp, from a cell.
+     *
+     * Accepted: a Unix timestamp; DD/MM/YYYY HH:MM (seconds optional, or 12-hour with AM/PM); DD/MM/YYYY (midnight);
+     * YYYY-MM-DD HH:MM (seconds optional, a "T" separator is allowed). Day, month and hour may drop
+     * their leading zero; the year must have four digits. Dates are read in the given time zone, or the
+     * current user's if none is given. A time that doesn't exist there, such as one skipped when daylight
+     * saving starts, is rejected rather than moved.
+     *
+     * @param string $value The cell value.
+     * @param \DateTimeZone|null $timezone Time zone to read dates in.
+     * @return int|null The Unix timestamp, or null if the value is blank or can't be read as a valid date.
+     */
+    public static function parse_time(string $value, ?\DateTimeZone $timezone = null): ?int {
+        $value = trim($value);
+        // PHP's date parser throws on null bytes, which would stop the whole import, so reject them here.
+        if ($value === '' || str_contains($value, "\0")) {
+            return null;
+        }
+        if (ctype_digit($value)) {
+            return (int)$value;
+        }
+        $timezone = $timezone ?? \core_date::get_user_timezone_object();
+        // A leading "!" resets fields the format doesn't set, so a date on its own means midnight.
+        // The 12-hour forms (9:00 AM, 9:00am) are what spreadsheets often write when saving as CSV.
+        $formats = [
+            '!d/m/Y H:i', '!d/m/Y H:i:s', '!d/m/Y g:i A', '!d/m/Y g:i:s A', '!d/m/Y g:iA', '!d/m/Y',
+            '!Y-m-d H:i', '!Y-m-d H:i:s', '!Y-m-d\TH:i', '!Y-m-d\TH:i:s',
+        ];
+        foreach ($formats as $format) {
+            $date = \DateTime::createFromFormat($format, $value, $timezone);
+            if ($date === false) {
+                continue;
+            }
+            // Reject dates PHP would silently roll over, such as 31/02/2027.
+            $errors = \DateTime::getLastErrors();
+            if ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) {
+                return null;
+            }
+            // The date must be exactly what was typed: a four-digit year, and no shift such as a
+            // 02:30 that daylight saving skips becoming 03:30.
+            $typed = date_parse_from_format($format, $value);
+            $created = [
+                'year' => (int)$date->format('Y'), 'month' => (int)$date->format('n'), 'day' => (int)$date->format('j'),
+                'hour' => (int)$date->format('G'), 'minute' => (int)$date->format('i'), 'second' => (int)$date->format('s'),
+            ];
+            foreach ($created as $field => $number) {
+                if ((int)$typed[$field] !== $number) {
+                    return null;
+                }
+            }
+            if ($created['year'] < 1000) {
+                return null;
+            }
+            return $date->getTimestamp();
+        }
+        return null;
+    }
+
+    /**
      * Import every row of a CSV or TSV file.
      *
      * The file is checked for the required columns first; if any are missing, or the file has no
@@ -179,7 +238,8 @@ class importer {
         $eventname   = trim($row['name'] ?? '');
         $courseid    = self::int_column($row, 'courseid', 0);
         $groupid     = self::int_column($row, 'groupid', 0);
-        $timestart   = self::int_column($row, 'timestart', 0);
+        $timestartvalue = trim((string)($row['timestart'] ?? ''));
+        $timestart   = self::parse_time($timestartvalue) ?? 0;
         $duration    = self::int_column($row, 'timeduration', 3600);
         $description = trim($row['description'] ?? '');
         $location    = trim($row['location'] ?? '');
@@ -204,7 +264,11 @@ class importer {
             return self::result($rownum, 'error', get_string('error_groupid', 'local_grpcalendarimport'));
         }
         if ($timestart <= 0) {
-            return self::result($rownum, 'error', get_string('error_timestart', 'local_grpcalendarimport'));
+            // Say what was wrong with a filled-in cell; a blank cell keeps the general message.
+            $error = ($timestartvalue === '')
+                ? get_string('error_timestart', 'local_grpcalendarimport')
+                : get_string('error_timestartformat', 'local_grpcalendarimport', $timestartvalue);
+            return self::result($rownum, 'error', $error);
         }
         // This tool only creates group events; other types need fields that a CSV can't safely supply.
         if ($eventtype !== 'group') {
