@@ -135,6 +135,8 @@ final class importer_test extends \advanced_testcase {
             '12-hour lower-case, no space' => ['3/05/2027 9:00am', 1809298800],
             '12-hour PM' => ['04/05/2027 4:00 PM', 1809410400],
             '12-hour with seconds' => ['3/05/2027 9:00:00 AM', 1809298800],
+            'daylight saving ends (first 02:30)' => ['04/04/2027 02:30', 1806769800],
+            'just after daylight saving starts' => ['03/10/2027 03:00', 1822492800],
         ];
     }
 
@@ -162,6 +164,10 @@ final class importer_test extends \advanced_testcase {
             'no 31 February' => ['31/02/2027 09:00'],
             'hour 25' => ['03/05/2027 25:00'],
             'us order with time words' => ['May 3 2027 9am'],
+            'two-digit year' => ['3/5/27 9:00'],
+            'three-digit year' => ['3/5/027 9:00'],
+            'skipped by daylight saving' => ['04/10/2026 02:30'],
+            'embedded null byte' => ["03/05/2027\0 09:00"],
         ];
     }
 

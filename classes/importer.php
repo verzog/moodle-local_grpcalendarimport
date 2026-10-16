@@ -133,7 +133,9 @@ class importer {
      *
      * Accepted: a Unix timestamp; DD/MM/YYYY HH:MM (seconds optional, or 12-hour with AM/PM); DD/MM/YYYY (midnight);
      * YYYY-MM-DD HH:MM (seconds optional, a "T" separator is allowed). Day, month and hour may drop
-     * their leading zero. Dates are read in the given time zone, or the current user's if none is given.
+     * their leading zero; the year must have four digits. Dates are read in the given time zone, or the
+     * current user's if none is given. A time that doesn't exist there, such as one skipped when daylight
+     * saving starts, is rejected rather than moved.
      *
      * @param string $value The cell value.
      * @param \DateTimeZone|null $timezone Time zone to read dates in.
@@ -141,7 +143,8 @@ class importer {
      */
     public static function parse_time(string $value, ?\DateTimeZone $timezone = null): ?int {
         $value = trim($value);
-        if ($value === '') {
+        // PHP's date parser throws on null bytes, which would stop the whole import, so reject them here.
+        if ($value === '' || str_contains($value, "\0")) {
             return null;
         }
         if (ctype_digit($value)) {
@@ -162,6 +165,21 @@ class importer {
             // Reject dates PHP would silently roll over, such as 31/02/2027.
             $errors = \DateTime::getLastErrors();
             if ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) {
+                return null;
+            }
+            // The date must be exactly what was typed: a four-digit year, and no shift such as a
+            // 02:30 that daylight saving skips becoming 03:30.
+            $typed = date_parse_from_format($format, $value);
+            $created = [
+                'year' => (int)$date->format('Y'), 'month' => (int)$date->format('n'), 'day' => (int)$date->format('j'),
+                'hour' => (int)$date->format('G'), 'minute' => (int)$date->format('i'), 'second' => (int)$date->format('s'),
+            ];
+            foreach ($created as $field => $number) {
+                if ((int)$typed[$field] !== $number) {
+                    return null;
+                }
+            }
+            if ($created['year'] < 1000) {
                 return null;
             }
             return $date->getTimestamp();
