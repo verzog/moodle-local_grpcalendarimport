@@ -1,6 +1,17 @@
 name: Moodle Plugin CI
 
-on: [push, pull_request]
+# Run on pull requests, and on pushes to main and tags only. A plain "[push, pull_request]" runs the whole matrix
+# twice for every push to a PR branch (once per event).
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -12,8 +23,9 @@ jobs:
       TZ: Australia/Sydney
 
     services:
+      # Each cell starts only the database it uses; an empty image skips the service.
       postgres:
-        image: postgres:17
+        image: ${{ matrix.database == 'pgsql' && 'postgres:17' || '' }}
         env:
           POSTGRES_USER: 'postgres'
           POSTGRES_HOST_AUTH_METHOD: 'trust'
@@ -22,9 +34,11 @@ jobs:
         options: --health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 3
 
       mariadb:
-        image: mariadb:11
+        image: ${{ matrix.database == 'mariadb' && 'mariadb:11' || '' }}
         env:
-          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'true'
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: '1'
+          MYSQL_CHARACTER_SET_SERVER: 'utf8mb4'
+          MYSQL_COLLATION_SERVER: 'utf8mb4_unicode_ci'
         ports:
           - 3306:3306
         options: >-
@@ -47,16 +61,17 @@ jobs:
 
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: plugin
+          persist-credentials: false
 
       - name: Setup PHP ${{ matrix.php }}
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           extensions: sodium
-          ini-values: max_input_vars=5000
+          ini-values: max_input_vars=5000, opcache.enable_cli=1, opcache.jit=disable
           coverage: none
 
       - name: Initialise moodle-plugin-ci
@@ -73,8 +88,9 @@ jobs:
           DB: ${{ matrix.database }}
           MOODLE_BRANCH: ${{ matrix.moodle-branch }}
 
+      # Lint once, on the lowest supported PHP: the syntax check doesn't vary by Moodle branch or database.
       - name: PHP Lint
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.php == '8.2' }}
         run: moodle-plugin-ci phplint
 
       - name: PHP Mess Detector
@@ -114,11 +130,11 @@ jobs:
       - name: Behat features
         id: behat
         if: ${{ !cancelled() }}
-        run: moodle-plugin-ci behat --profile chrome --auto-rerun 3
+        run: moodle-plugin-ci behat --profile chrome --scss-deprecations --auto-rerun 3
 
       - name: Upload Behat Faildump
         if: ${{ failure() && steps.behat.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Behat Faildump (${{ join(matrix.*, ', ') }})
           path: ${{ github.workspace }}/moodledata/behat_dump
