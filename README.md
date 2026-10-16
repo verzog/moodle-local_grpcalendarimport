@@ -108,6 +108,24 @@ Instead of looking up course and group IDs, use **Create a prefilled template** 
 Impossible dates such as `31/02/2027` are reported as errors rather than moved to the next month. The year
 must have four digits.
 
+## Import history and logging
+
+Every import of a file is recorded, whether it came from the upload page or from another plugin such as
+`tool_automate`. To debug a failed import:
+
+- **Site administration → Plugins → Group calendar import history** lists every run: who ran it, the file,
+  what ran it, and how many events were created, skipped and failed. Open a run to see each failed row,
+  with its error and **the exact values in the row**, and download the failed rows as CSV or Excel.
+- After an upload with errors, the import page links straight to that run's history.
+- Moodle's logs (**Reports → Logs**) get a "Group calendar import completed" event per run and a
+  "Group calendar import row failed" event per failed row. Row events stop after the first 50 failures of
+  a run, so one bad file can't flood the site log; the history always has every row.
+- History older than **Keep import history for** (Site administration → Plugins → Local plugins →
+  Calendar Group Event Importer; 90 days by default) is deleted each night by a scheduled task.
+
+The history records which user ran each import, so the plugin's privacy provider exports and deletes it
+on request.
+
 ## For developers
 
 Other plugins can create group events through the `\local_grpcalendarimport\importer` class instead of
@@ -116,11 +134,15 @@ calendar CSV import.
 
 | Method | Purpose |
 |---|---|
-| `import_file($filepath, $skipduplicates)` | Import every row of a CSV or TSV file; returns counts and per-row results |
+| `import_file($filepath, $skipduplicates, $filename = '', $source = '')` | Import a whole file (see below) |
 | `create_event($row, $skipduplicates, $rownum)` | Create one event from a row keyed by the column names above |
 | `event_exists($name, $courseid, $groupid, $timestart, $eventtype)` | Duplicate check used by `create_event()` |
 | `parse_file($filepath, &$headers)` / `missing_columns($headers)` | Read and check a file without importing it |
 | `parse_time($value, $timezone = null)` | Read a start time in any accepted format; returns a timestamp or null |
+
+`import_file()` returns the created/skipped/error counts, a result per row, and `runid`, the run's id in
+the import history. Pass your component name as `$source` (e.g. `'tool_automate'`) and the original file
+name as `$filename`, so the history shows what ran the import and on which file.
 
 Check `class_exists('\local_grpcalendarimport\importer')` and `importer::API_VERSION` (currently `1`)
 before calling it. The class does no capability checks: callers must check their own.

@@ -193,12 +193,23 @@ class importer {
      * The file is checked for the required columns first; if any are missing, or the file has no
      * data rows, nothing is created and 'error' explains why.
      *
+     * Every call is recorded in the import history (see import_log), including each failed row and
+     * its values, and logged as events.
+     *
      * @param string $filepath Absolute path to the file.
      * @param bool $skipduplicates Whether to skip events that already exist.
+     * @param string $filename Name to show for the file in the history; defaults to the file's own name.
+     * @param string $source What is running the import, shown in the history: e.g. 'upload' or a component
+     *                       name such as 'tool_automate'. Defaults to 'api'.
      * @return array Keys: error (string, empty when the file was processed), counts (ok, skip, error),
-     *               results (one create_event() result per row).
+     *               results (one create_event() result per row), runid (import history id, 0 if not recorded).
      */
-    public static function import_file(string $filepath, bool $skipduplicates): array {
+    public static function import_file(
+        string $filepath,
+        bool $skipduplicates,
+        string $filename = '',
+        string $source = ''
+    ): array {
         $outcome = ['error' => '', 'counts' => ['ok' => 0, 'skip' => 0, 'error' => 0], 'results' => []];
 
         $headers = [];
@@ -206,20 +217,25 @@ class importer {
         $missing = self::missing_columns($headers);
         if (!empty($missing)) {
             $outcome['error'] = get_string('error_missingcolumns', 'local_grpcalendarimport', implode(', ', $missing));
-            return $outcome;
-        }
-        if (empty($rows)) {
+        } else if (empty($rows)) {
             $outcome['error'] = get_string('error_norows', 'local_grpcalendarimport');
-            return $outcome;
+        } else {
+            $rownum = 1;
+            foreach ($rows as $row) {
+                $result = self::create_event($row, $skipduplicates, $rownum);
+                $outcome['results'][] = $result;
+                $outcome['counts'][$result['status']]++;
+                $rownum++;
+            }
         }
 
-        $rownum = 1;
-        foreach ($rows as $row) {
-            $result = self::create_event($row, $skipduplicates, $rownum);
-            $outcome['results'][] = $result;
-            $outcome['counts'][$result['status']]++;
-            $rownum++;
-        }
+        $outcome['runid'] = import_log::record(
+            $filename !== '' ? $filename : basename($filepath),
+            $source !== '' ? $source : 'api',
+            $skipduplicates,
+            $outcome,
+            $rows
+        );
         return $outcome;
     }
 

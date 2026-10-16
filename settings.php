@@ -31,4 +31,27 @@ if ($hassiteconfig) {
         new moodle_url('/local/grpcalendarimport/index.php'),
         'local/grpcalendarimport:manage'
     ));
+    $ADMIN->add('tools', new admin_externalpage(
+        'local_grpcalendarimport_history',
+        get_string('history_heading', 'local_grpcalendarimport'),
+        new moodle_url('/local/grpcalendarimport/history.php'),
+        'local/grpcalendarimport:manage'
+    ));
+
+    $settings = new admin_settingpage('local_grpcalendarimport_settings', get_string('pluginname', 'local_grpcalendarimport'));
+    $retention = [
+        30 => get_string('numdays', '', 30),
+        90 => get_string('numdays', '', 90),
+        180 => get_string('numdays', '', 180),
+        365 => get_string('numdays', '', 365),
+        0 => get_string('history_keepforever', 'local_grpcalendarimport'),
+    ];
+    $settings->add(new admin_setting_configselect(
+        'local_grpcalendarimport/historyretention',
+        get_string('history_retention', 'local_grpcalendarimport'),
+        get_string('history_retention_desc', 'local_grpcalendarimport'),
+        90,
+        $retention
+    ));
+    $ADMIN->add('localplugins', $settings);
 }
