@@ -50,7 +50,12 @@ if ($form->is_cancelled()) {
     if (!$tmpfile) {
         \core\notification::error(get_string('upload_error', 'local_grpcalendarimport'));
     } else {
-        $outcome = \local_grpcalendarimport\importer::import_file($tmpfile, !empty($data->skipduplicates));
+        $outcome = \local_grpcalendarimport\importer::import_file(
+            $tmpfile,
+            !empty($data->skipduplicates),
+            (string)$form->get_new_filename('csvfile'),
+            'upload'
+        );
         unlink($tmpfile);
 
         if ($outcome['error'] !== '') {
@@ -58,6 +63,11 @@ if ($form->is_cancelled()) {
         } else {
             $results = $outcome['results'];
             \core\notification::success(get_string('import_summary', 'local_grpcalendarimport', (object)$outcome['counts']));
+        }
+        // Point to the saved record of this run whenever something went wrong.
+        if ($outcome['runid'] && ($outcome['error'] !== '' || $outcome['counts']['error'] > 0)) {
+            $historyurl = new moodle_url('/local/grpcalendarimport/history.php', ['id' => $outcome['runid']]);
+            \core\notification::info(get_string('history_saved', 'local_grpcalendarimport', $historyurl->out()));
         }
     }
 }
