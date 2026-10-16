@@ -23,6 +23,7 @@
  */
 
 use local_grpcalendarimport\import_log;
+use local_grpcalendarimport\template;
 
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
@@ -56,13 +57,14 @@ if ($runid) {
         \core\dataformat::download_data(
             'import_failures_' . $run->id,
             $dataformat,
-            array_merge(['row', 'error'], $columns),
+            // Headings and values come from the uploaded file, so quote any that a spreadsheet would run as a formula.
+            array_map([template::class, 'escape_formula'], array_merge(['row', 'error'], $columns)),
             $failures,
             function ($failure) use ($columns): array {
                 $values = (array)json_decode((string)$failure->rowdata, true);
-                $record = [$failure->rownum, $failure->message];
+                $record = [$failure->rownum, template::escape_formula((string)$failure->message)];
                 foreach ($columns as $column) {
-                    $record[] = $values[$column] ?? '';
+                    $record[] = template::escape_formula((string)($values[$column] ?? ''));
                 }
                 return $record;
             }
