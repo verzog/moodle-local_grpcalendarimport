@@ -135,6 +135,7 @@ final class template_test extends \advanced_testcase {
     public function test_build_reads_do_not_grow_with_courses(): void {
         global $DB;
         $this->resetAfterTest();
+        $this->setAdminUser();
         $generator = $this->getDataGenerator();
 
         $reads = function (int $coursecount) use ($DB, $generator): int {
@@ -159,6 +160,43 @@ final class template_test extends \advanced_testcase {
         $extrareads = $reads(2 + $extracourses) - $reads(2);
         // Looking each course up on its own took at least one read per course; now it should take none.
         $this->assertLessThan($extracourses, $extrareads);
+    }
+
+    /**
+     * Test that a user who can't see hidden groups only gets the groups groups_get_all_groups() would show them.
+     */
+    public function test_build_respects_group_visibility(): void {
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $user = $generator->create_user();
+        $make = function (string $name, int $visibility, bool $member) use ($generator, $course, $user): void {
+            $group = $generator->create_group(['courseid' => $course->id, 'name' => $name, 'visibility' => $visibility]);
+            if ($member) {
+                $generator->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
+            }
+        };
+        $make('A visible to all', GROUPS_VISIBILITY_ALL, false);
+        $make('B members, is member', GROUPS_VISIBILITY_MEMBERS, true);
+        $make('C members, not member', GROUPS_VISIBILITY_MEMBERS, false);
+        $make('D own, is member', GROUPS_VISIBILITY_OWN, true);
+        $make('E hidden, is member', GROUPS_VISIBILITY_NONE, true);
+        // A student can't see hidden groups, and group members need to be enrolled.
+        $generator->enrol_user($user->id, $course->id, 'student');
+
+        $names = function () use ($course): array {
+            $rows = template::build(template::find_courses(0, false, [$course->id]), 1)['rows'];
+            return array_column($rows, 'group_name');
+        };
+
+        $this->setUser($user);
+        $expected = array_column(groups_get_all_groups($course->id, 0, 0, 'g.id, g.name'), 'name');
+        $this->assertEquals(['A visible to all', 'B members, is member', 'D own, is member'], $names());
+        $this->assertEquals($expected, $names());
+
+        // An administrator sees every group.
+        $this->setAdminUser();
+        $this->assertCount(5, $names());
     }
 
     /**

@@ -126,28 +126,71 @@ class template {
     }
 
     /**
-     * Fetch the groups of several courses in one query.
+     * Fetch the groups of several courses that the current user can see, in at most two queries.
+     *
+     * Applies the same visibility rule as groups_get_all_groups(): in a course where the user lacks
+     * moodle/course:viewhiddengroups, only groups visible to everyone, and "members" or "own" groups the user
+     * belongs to, are returned.
      *
      * @param int[] $courseids Course ids.
      * @return array Course id => list of group records (id, courseid, name), in name order.
      */
     private static function get_groups(array $courseids): array {
-        global $DB;
+        global $DB, $USER;
+
+        // The course contexts were preloaded by find_courses(), so these checks don't query per course.
+        $viewall = [];
+        $restricted = [];
+        foreach ($courseids as $courseid) {
+            if (has_capability('moodle/course:viewhiddengroups', \context_course::instance($courseid))) {
+                $viewall[] = $courseid;
+            } else {
+                $restricted[] = $courseid;
+            }
+        }
 
         $bycourse = [];
-        if (empty($courseids)) {
-            return $bycourse;
+        if (!empty($viewall)) {
+            [$insql, $params] = $DB->get_in_or_equal($viewall, SQL_PARAMS_NAMED, 'cid');
+            $sql = "SELECT g.id, g.courseid, g.name
+                      FROM {groups} g
+                     WHERE g.courseid {$insql}
+                  ORDER BY g.courseid, g.name, g.id";
+            self::add_groups($bycourse, $sql, $params);
         }
-        [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED);
-        $groups = $DB->get_recordset_sql(
-            "SELECT id, courseid, name FROM {groups} WHERE courseid {$insql} ORDER BY courseid, name, id",
-            $params
-        );
+        if (!empty($restricted)) {
+            [$insql, $params] = $DB->get_in_or_equal($restricted, SQL_PARAMS_NAMED, 'cid');
+            [$visinsql, $visparams] = $DB->get_in_or_equal(
+                [GROUPS_VISIBILITY_MEMBERS, GROUPS_VISIBILITY_OWN],
+                SQL_PARAMS_NAMED,
+                'vis'
+            );
+            $params += $visparams + ['userid' => $USER->id, 'visall' => GROUPS_VISIBILITY_ALL];
+            $sql = "SELECT g.id, g.courseid, g.name
+                      FROM {groups} g
+                 LEFT JOIN {groups_members} gm ON gm.groupid = g.id AND gm.userid = :userid
+                     WHERE g.courseid {$insql}
+                       AND (g.visibility = :visall OR (g.visibility {$visinsql} AND gm.id IS NOT NULL))
+                  ORDER BY g.courseid, g.name, g.id";
+            self::add_groups($bycourse, $sql, $params);
+        }
+        return $bycourse;
+    }
+
+    /**
+     * Run a group query and add its groups to a list keyed by course id.
+     *
+     * @param array $bycourse Course id => list of group records, added to.
+     * @param string $sql Query returning id, courseid and name.
+     * @param array $params Query parameters.
+     */
+    private static function add_groups(array &$bycourse, string $sql, array $params): void {
+        global $DB;
+        $groups = $DB->get_recordset_sql($sql, $params);
         foreach ($groups as $group) {
             $bycourse[$group->courseid][] = $group;
         }
         $groups->close();
-        return $bycourse;
     }
 
     /**
