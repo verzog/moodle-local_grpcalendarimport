@@ -170,10 +170,13 @@ final class template_test extends \advanced_testcase {
         $generator = $this->getDataGenerator();
         $course = $generator->create_course();
         $user = $generator->create_user();
+        // A student can't see hidden groups. Enrol first: groups_add_member() ignores users who aren't enrolled.
+        $generator->enrol_user($user->id, $course->id, 'student');
         $make = function (string $name, int $visibility, bool $member) use ($generator, $course, $user): void {
             $group = $generator->create_group(['courseid' => $course->id, 'name' => $name, 'visibility' => $visibility]);
             if ($member) {
                 $generator->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
+                $this->assertTrue(groups_is_member($group->id, $user->id));
             }
         };
         $make('A visible to all', GROUPS_VISIBILITY_ALL, false);
@@ -181,8 +184,6 @@ final class template_test extends \advanced_testcase {
         $make('C members, not member', GROUPS_VISIBILITY_MEMBERS, false);
         $make('D own, is member', GROUPS_VISIBILITY_OWN, true);
         $make('E hidden, is member', GROUPS_VISIBILITY_NONE, true);
-        // A student can't see hidden groups, and group members need to be enrolled.
-        $generator->enrol_user($user->id, $course->id, 'student');
 
         $names = function () use ($course): array {
             $rows = template::build(template::find_courses(0, false, [$course->id]), 1)['rows'];
