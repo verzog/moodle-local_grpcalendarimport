@@ -54,7 +54,8 @@ if ($form->is_cancelled()) {
             $tmpfile,
             !empty($data->skipduplicates),
             (string)$form->get_new_filename('csvfile'),
-            'upload'
+            'upload',
+            \local_grpcalendarimport\importer::MAX_UPLOAD_ROWS
         );
         unlink($tmpfile);
 

@@ -100,6 +100,110 @@ final class importer_test extends \advanced_testcase {
     }
 
     /**
+     * Test that a file with more rows than the limit is rejected whole, and one at the limit is imported.
+     */
+    public function test_import_file_row_limit(): void {
+        global $DB;
+        $this->resetAfterTest();
+
+        $course = $this->getDataGenerator()->create_course();
+        $group = $this->getDataGenerator()->create_group(['courseid' => $course->id]);
+        $csv = "name,courseid,groupid,timestart\n";
+        for ($i = 1; $i <= 3; $i++) {
+            $csv .= "Event {$i},{$course->id},{$group->id},1809298800\n";
+        }
+        $file = $this->temp_file($csv);
+
+        $outcome = importer::import_file($file, false, '', '', 2);
+        $a = (object)['rows' => 3, 'max' => 2];
+        $this->assertSame(get_string('error_toomanyrows', 'local_grpcalendarimport', $a), $outcome['error']);
+        $this->assertSame(['ok' => 0, 'skip' => 0, 'error' => 0], $outcome['counts']);
+        $this->assertSame(0, $DB->count_records('event', ['courseid' => $course->id]));
+        $run = $DB->get_record(import_log::RUN_TABLE, ['id' => $outcome['runid']], '*', MUST_EXIST);
+        $this->assertSame($outcome['error'], $run->fileerror);
+
+        $outcome = importer::import_file($file, false, '', '', 3);
+        unlink($file);
+        $this->assertSame('', $outcome['error']);
+        $this->assertSame(3, $outcome['counts']['ok']);
+        $this->assertSame(3, $DB->count_records('event', ['courseid' => $course->id]));
+    }
+
+    /**
+     * Test that a whole-file import still rejects missing courses and groups, and groups from another course.
+     */
+    public function test_import_file_checks_courses_and_groups(): void {
+        $this->resetAfterTest();
+
+        $course1 = $this->getDataGenerator()->create_course();
+        $course2 = $this->getDataGenerator()->create_course();
+        $group1 = $this->getDataGenerator()->create_group(['courseid' => $course1->id]);
+        $group2 = $this->getDataGenerator()->create_group(['courseid' => $course2->id]);
+        $missing = 999999;
+
+        $file = $this->temp_file("name,courseid,groupid,timestart\n" .
+            "Good,{$course1->id},{$group1->id},1809298800\n" .
+            "Other course's group,{$course1->id},{$group2->id},1809298800\n" .
+            "No such course,{$missing},{$group1->id},1809298800\n" .
+            "No such group,{$course1->id},{$missing},1809298800\n" .
+            "Good too,{$course2->id},{$group2->id},1809298800\n");
+        $outcome = importer::import_file($file, false);
+        unlink($file);
+
+        $component = 'local_grpcalendarimport';
+        $this->assertSame(['ok' => 2, 'skip' => 0, 'error' => 3], $outcome['counts']);
+        $this->assertSame('ok', $outcome['results'][0]['status']);
+        $this->assertSame(
+            get_string('error_groupnotfound', $component, ['groupid' => $group2->id, 'courseid' => $course1->id]),
+            $outcome['results'][1]['message']
+        );
+        $this->assertSame(get_string('error_coursenotfound', $component, $missing), $outcome['results'][2]['message']);
+        $this->assertSame(
+            get_string('error_groupnotfound', $component, ['groupid' => $missing, 'courseid' => $course1->id]),
+            $outcome['results'][3]['message']
+        );
+        $this->assertSame('ok', $outcome['results'][4]['status']);
+    }
+
+    /**
+     * Test that course and group lookups don't add database reads for every row of a file.
+     */
+    public function test_import_file_lookups_do_not_grow_with_rows(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $course1 = $this->getDataGenerator()->create_course();
+        $course2 = $this->getDataGenerator()->create_course();
+        $this->getDataGenerator()->create_group(['courseid' => $course1->id]);
+        $group2 = $this->getDataGenerator()->create_group(['courseid' => $course2->id]);
+
+        // Every row names a group from the other course, so each one stops at the group check.
+        $reads = function (int $rowcount) use ($DB, $course1, $group2): int {
+            $csv = "name,courseid,groupid,timestart\n";
+            for ($i = 0; $i < $rowcount; $i++) {
+                $csv .= "Event {$i},{$course1->id},{$group2->id},1809298800\n";
+            }
+            $file = $this->temp_file($csv);
+            $sink = $this->redirectEvents();
+            $before = $DB->perf_get_reads();
+            $outcome = importer::import_file($file, false);
+            $after = $DB->perf_get_reads();
+            $sink->close();
+            unlink($file);
+            $this->assertSame($rowcount, $outcome['counts']['error']);
+            return $after - $before;
+        };
+
+        // The first import warms Moodle's caches, so it isn't compared.
+        $reads(2);
+        $extrarows = 20;
+        $extrareads = $reads(2 + $extrarows) - $reads(2);
+        // Checking each row on its own took two reads per row; now it should take none.
+        $this->assertLessThan($extrarows, $extrareads);
+    }
+
+    /**
      * Test the duplicate lookup used by other plugins.
      */
     public function test_event_exists(): void {

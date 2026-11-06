@@ -143,6 +143,20 @@ final class import_log_test extends \advanced_testcase {
         $this->assertCount(import_log::MAX_ROW_EVENTS, $rowevents);
         $stored = $DB->count_records(import_log::FAIL_TABLE, ['runid' => $outcome['runid']]);
         $this->assertEquals(import_log::MAX_ROW_EVENTS + 5, $stored);
+
+        // The failures after the logged ones are saved in a batch, with their own row numbers and values.
+        $rownums = $DB->get_fieldset_sql(
+            'SELECT rownum FROM {' . import_log::FAIL_TABLE . '} WHERE runid = ? ORDER BY rownum',
+            [$outcome['runid']]
+        );
+        $this->assertEquals(range(1, import_log::MAX_ROW_EVENTS + 5), array_map('intval', $rownums));
+        $last = $DB->get_record(
+            import_log::FAIL_TABLE,
+            ['runid' => $outcome['runid'], 'rownum' => import_log::MAX_ROW_EVENTS + 5],
+            '*',
+            MUST_EXIST
+        );
+        $this->assertSame('Event ' . (import_log::MAX_ROW_EVENTS + 4), json_decode($last->rowdata, true)['name']);
     }
 
     /**
