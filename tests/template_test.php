@@ -130,6 +130,101 @@ final class template_test extends \advanced_testcase {
     }
 
     /**
+     * Test that finding courses and building a template doesn't add database reads for every course.
+     */
+    public function test_build_reads_do_not_grow_with_courses(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+        $generator = $this->getDataGenerator();
+
+        $reads = function (int $coursecount) use ($DB, $generator): int {
+            $category = $generator->create_category();
+            for ($i = 0; $i < $coursecount; $i++) {
+                $course = $generator->create_course(['category' => $category->id]);
+                $generator->create_group(['courseid' => $course->id]);
+            }
+            // Start each measurement without the courses' contexts in memory, as a fresh page request would.
+            \context_helper::reset_caches();
+            $before = $DB->perf_get_reads();
+            $courses = template::find_courses($category->id, false, []);
+            $outcome = template::build($courses, 1);
+            $after = $DB->perf_get_reads();
+            $this->assertCount($coursecount, $outcome['rows']);
+            // The preloaded context columns are not left on the course records.
+            $this->assertObjectNotHasProperty('ctxid', reset($courses));
+            return $after - $before;
+        };
+
+        $extracourses = 10;
+        $extrareads = $reads(2 + $extracourses) - $reads(2);
+        // Looking each course up on its own took at least one read per course; now it should take none.
+        $this->assertLessThan($extracourses, $extrareads);
+    }
+
+    /**
+     * Test that a user who can't see hidden groups only gets the groups groups_get_all_groups() would show them.
+     */
+    public function test_build_respects_group_visibility(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $user = $generator->create_user();
+        // A student can't see hidden groups. Enrol first: groups_add_member() ignores users who aren't enrolled.
+        $generator->enrol_user($user->id, $course->id, 'student');
+        $make = function (string $name, int $visibility, bool $member) use ($DB, $generator, $course, $user): void {
+            $group = $generator->create_group(['courseid' => $course->id, 'name' => $name, 'visibility' => $visibility]);
+            if ($member) {
+                $generator->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
+                // Checked in the table: groups_is_member() applies visibility rules for the current user.
+                $this->assertTrue($DB->record_exists('groups_members', ['groupid' => $group->id, 'userid' => $user->id]));
+            }
+        };
+        $make('A visible to all', GROUPS_VISIBILITY_ALL, false);
+        $make('B members, is member', GROUPS_VISIBILITY_MEMBERS, true);
+        $make('C members, not member', GROUPS_VISIBILITY_MEMBERS, false);
+        $make('D own, is member', GROUPS_VISIBILITY_OWN, true);
+        $make('E hidden, is member', GROUPS_VISIBILITY_NONE, true);
+
+        $names = function () use ($course): array {
+            $rows = template::build(template::find_courses(0, false, [$course->id]), 1)['rows'];
+            return array_column($rows, 'group_name');
+        };
+
+        $this->setUser($user);
+        $expected = array_column(groups_get_all_groups($course->id, 0, 0, 'g.id, g.name'), 'name');
+        $this->assertEquals(['A visible to all', 'B members, is member', 'D own, is member'], $names());
+        $this->assertEquals($expected, $names());
+
+        // An administrator sees every group.
+        $this->setAdminUser();
+        $this->assertCount(5, $names());
+    }
+
+    /**
+     * Test that the "courses without groups" warning lists only the first few names and escapes them.
+     */
+    public function test_nogroups_message(): void {
+        $component = 'local_grpcalendarimport';
+
+        $this->assertSame(
+            get_string('template_nogroups', $component, 'Maths, Art &amp; Design'),
+            template::nogroups_message([2 => 'Maths', 3 => 'Art & Design'])
+        );
+
+        $names = [];
+        for ($i = 1; $i <= template::MAX_NOGROUPS_LISTED + 3; $i++) {
+            $names[$i + 1] = "Course {$i}";
+        }
+        $listed = implode(', ', array_slice($names, 0, template::MAX_NOGROUPS_LISTED));
+        $this->assertSame(
+            get_string('template_nogroups_more', $component, (object)['courses' => $listed, 'more' => 3]),
+            template::nogroups_message($names)
+        );
+    }
+
+    /**
      * Test that names a spreadsheet would read as a formula are quoted.
      */
     public function test_build_escapes_formula_names(): void {
