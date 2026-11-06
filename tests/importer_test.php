@@ -198,11 +198,16 @@ final class importer_test extends \advanced_testcase {
         $this->assertSame(get_string('error_usernotfound', $component, $deleted->id), $outcome['results'][4]['message']);
         $this->assertSame(get_string('error_usernotfound', $component, -5), $outcome['results'][5]['message']);
 
-        $event = $DB->get_record('event', ['name' => 'Real user'], '*', MUST_EXIST);
-        $this->assertEquals($user->id, $event->userid);
+        // The name column is TEXT, which can't go in a get_record() condition, so match names in PHP.
+        $userids = [];
+        foreach ($DB->get_records('event', ['courseid' => $course->id], '', 'id, name, userid') as $event) {
+            $userids[$event->name] = (int)$event->userid;
+        }
+        $this->assertCount(3, $userids);
+        $this->assertSame((int)$user->id, $userids['Real user']);
         // A blank or 0 userid becomes the user running the import, as calendar_event does for any new event.
-        $this->assertEquals($USER->id, $DB->get_field('event', 'userid', ['name' => 'No user'], MUST_EXIST));
-        $this->assertEquals($USER->id, $DB->get_field('event', 'userid', ['name' => 'Zero user'], MUST_EXIST));
+        $this->assertSame((int)$USER->id, $userids['No user']);
+        $this->assertSame((int)$USER->id, $userids['Zero user']);
     }
 
     /**
