@@ -166,17 +166,19 @@ final class template_test extends \advanced_testcase {
      * Test that a user who can't see hidden groups only gets the groups groups_get_all_groups() would show them.
      */
     public function test_build_respects_group_visibility(): void {
+        global $DB;
         $this->resetAfterTest();
         $generator = $this->getDataGenerator();
         $course = $generator->create_course();
         $user = $generator->create_user();
         // A student can't see hidden groups. Enrol first: groups_add_member() ignores users who aren't enrolled.
         $generator->enrol_user($user->id, $course->id, 'student');
-        $make = function (string $name, int $visibility, bool $member) use ($generator, $course, $user): void {
+        $make = function (string $name, int $visibility, bool $member) use ($DB, $generator, $course, $user): void {
             $group = $generator->create_group(['courseid' => $course->id, 'name' => $name, 'visibility' => $visibility]);
             if ($member) {
                 $generator->create_group_member(['groupid' => $group->id, 'userid' => $user->id]);
-                $this->assertTrue(groups_is_member($group->id, $user->id));
+                // Checked in the table: groups_is_member() applies visibility rules for the current user.
+                $this->assertTrue($DB->record_exists('groups_members', ['groupid' => $group->id, 'userid' => $user->id]));
             }
         };
         $make('A visible to all', GROUPS_VISIBILITY_ALL, false);
