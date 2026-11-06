@@ -147,6 +147,7 @@ class import_log {
             if ($events >= self::MAX_ROW_EVENTS) {
                 $unlogged[] = $failure;
             } else {
+                // Security-lint: ignore P1 (bounded: at most MAX_ROW_EVENTS per run need their own id for an event).
                 $failid = $DB->insert_record(self::FAIL_TABLE, $failure);
                 $events++;
                 event\import_row_failed::create([
@@ -207,7 +208,7 @@ class import_log {
     }
 
     /**
-     * Delete runs (and their failed rows) by id.
+     * Delete runs (and their failed rows) by id, with any stored upload and any queued background import task.
      *
      * @param int[] $runids Run ids.
      */
@@ -216,15 +217,34 @@ class import_log {
         if (empty($runids)) {
             return;
         }
+        // A deleted run can't be carried on, and its task stores the uploader's user id, so it goes too.
+        self::cancel_tasks($runids);
         $fs = get_file_storage();
         $contextid = \context_system::instance()->id;
         foreach (array_chunk($runids, 500) as $chunk) {
             // A background import's uploaded file is normally deleted when it finishes; this catches any left over.
-            foreach ($chunk as $runid) {
-                $fs->delete_area_files($contextid, 'local_grpcalendarimport', self::FILEAREA, $runid);
-            }
+            // Security-lint: ignore P1 (batched: three queries per 500 runs, not per run).
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'runid');
+            $fs->delete_area_files_select($contextid, 'local_grpcalendarimport', self::FILEAREA, $insql, $params);
+            // Security-lint: ignore S12, P1 (history clean-up and privacy erasure, not a user action; batched).
             $DB->delete_records_list(self::FAIL_TABLE, 'runid', $chunk);
+            // Security-lint: ignore P1 (batched: one delete per 500 runs).
             $DB->delete_records_list(self::RUN_TABLE, 'id', $chunk);
+        }
+    }
+
+    /**
+     * Cancel the queued background import tasks of some runs.
+     *
+     * @param int[] $runids Run ids.
+     */
+    private static function cancel_tasks(array $runids): void {
+        $runids = array_flip(array_map('intval', $runids));
+        // Security-lint: ignore P1 (bounded: one task per unfinished background import, at most one per user).
+        foreach (\core\task\manager::get_adhoc_tasks(task\background_import::class) as $task) {
+            if (isset($runids[(int)($task->get_custom_data()->runid ?? 0)])) {
+                \core\task\manager::delete_adhoc_task((int)$task->get_id());
+            }
         }
     }
 
@@ -240,6 +260,7 @@ class import_log {
         // Work in batches so a large backlog never has to be held in memory at once.
         $deleted = 0;
         do {
+            // Security-lint: ignore P1 (batched: one query per DELETE_BATCH runs).
             $runids = array_keys($DB->get_records_select(
                 self::RUN_TABLE,
                 'timecreated < :before AND status <> :queued AND status <> :running',
@@ -249,6 +270,7 @@ class import_log {
                 0,
                 $batch
             ));
+            // Security-lint: ignore P1 (batched: delete_runs() works on the whole batch).
             self::delete_runs($runids);
             $deleted += count($runids);
         } while (count($runids) === $batch);

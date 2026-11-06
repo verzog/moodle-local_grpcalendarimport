@@ -32,8 +32,9 @@ $capabilities = [
         'captype'      => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes'   => [
-            // Managers run the site's courses and groups, and already hold capabilities with these risks
-            // (for example moodle/badges:manageglobalsettings and moodle/site:sendmessage), so they get this one by default.
+            // Security-lint: ignore S14 (managers run the site's courses and groups; see below).
+            // Managers already hold capabilities with these risks, for example moodle/badges:manageglobalsettings
+            // and moodle/site:sendmessage, so they get this one by default.
             'manager' => CAP_ALLOW,
         ],
     ],

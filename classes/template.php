@@ -116,6 +116,7 @@ class template {
                       FROM {course} c
                  LEFT JOIN {context} ctx ON ctx.instanceid = c.id AND ctx.contextlevel = :contextlevel
                      WHERE c.{$field} {$insql}";
+            // Security-lint: ignore P1 (batched: one query per LOOKUP_CHUNK ids).
             foreach ($DB->get_records_sql($sql, $params) as $course) {
                 // This caches the context and removes its columns from the record.
                 \context_helper::preload_from_record($course);
@@ -210,6 +211,7 @@ class template {
         // Work through the courses a batch at a time, fetching each batch's groups in one query, and stop
         // as soon as the row limit is reached so the remaining courses are never looked at.
         foreach (array_chunk($courses, self::LOOKUP_CHUNK) as $batch) {
+            // Security-lint: ignore P1 (batched: at most two group queries per LOOKUP_CHUNK courses).
             $groupsbycourse = self::get_groups(array_map(function ($course) {
                 return (int)$course->id;
             }, $batch));
