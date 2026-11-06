@@ -10,8 +10,8 @@ file via a simple admin interface.
 - Skips duplicate events (configurable) — checks by name, course, group, time, and event type
 - Validates that each course and group exist before creating events
 - Displays a per-row results table showing created, skipped, and errored rows
-- Imports up to 2,000 events per uploaded file; a larger file is rejected before anything is created,
-  so split it into smaller files
+- Imports up to 2,000 events from an uploaded file straight away, and files of up to 20,000 events in
+  the background, notifying you when they have finished (see [Large files](#large-files))
 
 ## Requirements
 
@@ -113,6 +113,27 @@ Instead of looking up course and group IDs, use **Create a prefilled template** 
 
 Impossible dates such as `31/02/2027` are reported as errors rather than moved to the next month. The year
 must have four digits.
+
+## Large files
+
+Files with up to 2,000 events are imported while the page loads, and the results are shown straight away.
+A file with more (up to 20,000) is imported in the background by cron instead:
+
+- The upload page says the file has been queued. Until it has finished, the page shows a link to its
+  progress instead of the upload form, so the same file can't be queued twice.
+- The import history shows it as **Queued**, then **Running** with how many rows are done, then
+  **Finished**.
+- When it finishes you get a Moodle notification (and an email, if you have turned that on in your
+  notification preferences) with the numbers created, skipped and failed, linking to the import history.
+- Each run of the task imports up to 2,000 rows and saves its progress every 200 rows. If a run is
+  interrupted, the next carries on from the last save, so at most 200 rows are imported a second time;
+  tick **Skip duplicates** to make that harmless.
+- The uploaded file is kept until the import finishes, then deleted.
+
+Background imports need cron to be running. An administrator can turn them off with **Import large files
+in the background** (Site administration → Plugins → Local plugins → Calendar Group Event Importer). Files
+with more than 2,000 events are then rejected, and imports already queued stop the next time their task
+runs, keeping the events created so far.
 
 ## Import history and logging
 

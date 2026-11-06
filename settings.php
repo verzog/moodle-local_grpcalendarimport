@@ -58,5 +58,15 @@ if ($hassiteconfig) {
         90,
         $retention
     ));
+    $limits = (object)[
+        'upload' => \local_grpcalendarimport\importer::MAX_UPLOAD_ROWS,
+        'max' => \local_grpcalendarimport\background::MAX_ROWS,
+    ];
+    $settings->add(new admin_setting_configcheckbox(
+        'local_grpcalendarimport/backgroundimports',
+        get_string('backgroundimports', 'local_grpcalendarimport'),
+        get_string('backgroundimports_desc', 'local_grpcalendarimport', $limits),
+        1
+    ));
     $ADMIN->add('localplugins', $settings);
 }

@@ -68,5 +68,22 @@ function xmldb_local_grpcalendarimport_upgrade($oldversion) {
         upgrade_plugin_savepoint(true, 2026101603, 'local', 'grpcalendarimport');
     }
 
+    if ($oldversion < 2026110605) {
+        // Background imports: each run's status and progress. Existing runs all finished during their request.
+        $table = new xmldb_table('local_grpcalendarimport_run');
+        $fields = [
+            new xmldb_field('status', XMLDB_TYPE_CHAR, '10', null, XMLDB_NOTNULL, null, 'done', 'fileerror'),
+            new xmldb_field('totalrows', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'status'),
+            new xmldb_field('rowsdone', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'totalrows'),
+        ];
+        foreach ($fields as $field) {
+            if (!$dbman->field_exists($table, $field)) {
+                $dbman->add_field($table, $field);
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026110605, 'local', 'grpcalendarimport');
+    }
+
     return true;
 }

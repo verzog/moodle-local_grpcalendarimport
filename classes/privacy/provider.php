@@ -62,6 +62,9 @@ final class provider implements
             'countskipped' => 'privacy:metadata:run:counts',
             'counterrors' => 'privacy:metadata:run:counts',
             'fileerror' => 'privacy:metadata:run:fileerror',
+            'status' => 'privacy:metadata:run:status',
+            'totalrows' => 'privacy:metadata:run:status',
+            'rowsdone' => 'privacy:metadata:run:status',
             'timecreated' => 'privacy:metadata:run:timecreated',
         ], 'privacy:metadata:run');
         $collection->add_database_table(import_log::FAIL_TABLE, [
@@ -69,6 +72,7 @@ final class provider implements
             'message' => 'privacy:metadata:fail:message',
             'rowdata' => 'privacy:metadata:fail:rowdata',
         ], 'privacy:metadata:fail');
+        $collection->add_subsystem_link('core_files', [], 'privacy:metadata:core_files');
         return $collection;
     }
 
@@ -112,7 +116,9 @@ final class provider implements
                 continue;
             }
             $runs = [];
+            $runids = [];
             foreach ($DB->get_records(import_log::RUN_TABLE, ['userid' => $userid], 'timecreated') as $run) {
+                $runids[] = (int)$run->id;
                 $failures = [];
                 foreach ($DB->get_records(import_log::FAIL_TABLE, ['runid' => $run->id], 'rownum') as $failure) {
                     $failures[] = [
@@ -128,15 +134,25 @@ final class provider implements
                     'skipped' => $run->countskipped,
                     'errors' => $run->counterrors,
                     'fileerror' => $run->fileerror,
+                    'status' => $run->status,
+                    'rowsdone' => $run->rowsdone,
+                    'totalrows' => $run->totalrows,
                     'time' => transform::datetime($run->timecreated),
                     'failures' => $failures,
                 ];
             }
             if ($runs) {
-                writer::with_context($context)->export_data(
-                    [get_string('history_heading', 'local_grpcalendarimport')],
-                    (object)['runs' => $runs]
-                );
+                $subcontext = [get_string('history_heading', 'local_grpcalendarimport')];
+                writer::with_context($context)->export_data($subcontext, (object)['runs' => $runs]);
+                // The uploaded file of a background import that hasn't finished yet.
+                foreach ($runids as $runid) {
+                    writer::with_context($context)->export_area_files(
+                        $subcontext,
+                        'local_grpcalendarimport',
+                        import_log::FILEAREA,
+                        $runid
+                    );
+                }
             }
         }
     }

@@ -231,15 +231,7 @@ class importer {
             $a = (object)['rows' => count($rows), 'max' => $maxrows];
             $outcome['error'] = get_string('error_toomanyrows', 'local_grpcalendarimport', $a);
         } else {
-            // Look up every course, group and user in the file once, rather than once per row.
-            [$courses, $groups, $users] = self::existing_records($rows);
-            $rownum = 1;
-            foreach ($rows as $row) {
-                $result = self::create_event_checked($row, $skipduplicates, $rownum, $courses, $groups, $users);
-                $outcome['results'][] = $result;
-                $outcome['counts'][$result['status']]++;
-                $rownum++;
-            }
+            $outcome = ['error' => ''] + self::create_events($rows, $skipduplicates);
         }
 
         $outcome['runid'] = import_log::record(
@@ -249,6 +241,29 @@ class importer {
             $outcome,
             $rows
         );
+        return $outcome;
+    }
+
+    /**
+     * Create the events for a list of rows, such as a whole file or one batch of a background import.
+     *
+     * Every course, group and user the rows name is looked up once for the list, rather than once per row.
+     *
+     * @param array $rows Rows, as returned by parse_file().
+     * @param bool $skipduplicates Whether to skip events that already exist.
+     * @param int $firstrow The 1-based row number of the first row, for reporting.
+     * @return array Keys: counts (ok, skip, error) and results (one create_event() result per row).
+     */
+    public static function create_events(array $rows, bool $skipduplicates, int $firstrow = 1): array {
+        $outcome = ['counts' => ['ok' => 0, 'skip' => 0, 'error' => 0], 'results' => []];
+        [$courses, $groups, $users] = self::existing_records($rows);
+        $rownum = $firstrow;
+        foreach ($rows as $row) {
+            $result = self::create_event_checked($row, $skipduplicates, $rownum, $courses, $groups, $users);
+            $outcome['results'][] = $result;
+            $outcome['counts'][$result['status']]++;
+            $rownum++;
+        }
         return $outcome;
     }
 
