@@ -44,12 +44,13 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
      * Run an import with one failing row as the given user.
      *
      * @param \stdClass $user The user.
+     * @param string $name Name in the failing row, to tell runs apart.
      * @return int The run id.
      */
-    private function import_as(\stdClass $user): int {
+    private function import_as(\stdClass $user, string $name = 'Bad'): int {
         $this->setUser($user);
         $file = tempnam(sys_get_temp_dir(), 'grpcal_');
-        file_put_contents($file, "name,courseid,groupid,timestart\nBad,0,0,1809298800\n");
+        file_put_contents($file, "name,courseid,groupid,timestart\n{$name},0,0,1809298800\n");
         $runid = importer::import_file($file, false, 'privacy.csv')['runid'];
         unlink($file);
         return $runid;
@@ -102,6 +103,31 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         $this->assertCount(1, $data->runs);
         $this->assertEquals('privacy.csv', $data->runs[0]['file']);
         $this->assertEquals('Bad', $data->runs[0]['failures'][0]['values']['name']);
+    }
+
+    /**
+     * Test each exported run gets its own failed rows, and no other user's, now they are fetched in one query.
+     */
+    public function test_export_keeps_failures_with_their_run(): void {
+        $this->resetAfterTest();
+        $user = $this->getDataGenerator()->create_user();
+        $other = $this->getDataGenerator()->create_user();
+        $this->import_as($user, 'First');
+        $this->import_as($other, 'Other');
+        $this->import_as($user, 'Second');
+        $system = \context_system::instance();
+
+        provider::export_user_data(new approved_contextlist($user, 'local_grpcalendarimport', [$system->id]));
+
+        $data = writer::with_context($system)->get_data([get_string('history_heading', 'local_grpcalendarimport')]);
+        $this->assertCount(2, $data->runs);
+        $names = [];
+        foreach ($data->runs as $run) {
+            $this->assertCount(1, $run['failures']);
+            $names[] = $run['failures'][0]['values']['name'];
+        }
+        sort($names);
+        $this->assertSame(['First', 'Second'], $names);
     }
 
     /**

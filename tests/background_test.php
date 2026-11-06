@@ -282,6 +282,40 @@ final class background_test extends \advanced_testcase {
     }
 
     /**
+     * Test that deleting a queued run also deletes its stored file and cancels its task.
+     */
+    public function test_deleting_run_cancels_task(): void {
+        $keep = $this->queue_rows(2);
+        $runid = $this->queue_rows(2);
+        $this->assertCount(2, \core\task\manager::get_adhoc_tasks(task\background_import::class));
+
+        import_log::delete_runs([$runid]);
+
+        $this->assertSame(0, $this->count_stored_files($runid));
+        $tasks = \core\task\manager::get_adhoc_tasks(task\background_import::class);
+        $this->assertCount(1, $tasks);
+        $this->assertEquals($keep, reset($tasks)->get_custom_data()->runid);
+        $this->assertSame(1, $this->count_stored_files($keep));
+    }
+
+    /**
+     * Test that erasing a user's data under the privacy API cancels their queued background import.
+     */
+    public function test_privacy_erasure_cancels_task(): void {
+        global $USER;
+        $runid = $this->queue_rows(2);
+        $system = \context_system::instance();
+
+        privacy\provider::delete_data_for_user(
+            new \core_privacy\local\request\approved_contextlist($USER, 'local_grpcalendarimport', [$system->id])
+        );
+
+        $this->assertCount(0, \core\task\manager::get_adhoc_tasks(task\background_import::class));
+        $this->assertSame(0, $this->count_stored_files($runid));
+        $this->assertFalse(background::user_has_pending((int)$USER->id));
+    }
+
+    /**
      * Test that background imports are on until an administrator turns them off.
      */
     public function test_enabled_by_default(): void {

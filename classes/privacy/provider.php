@@ -115,17 +115,30 @@ final class provider implements
             if ($context->contextlevel != CONTEXT_SYSTEM) {
                 continue;
             }
+            // Every failed row of the user's runs, in one query, grouped by run.
+            $failures = [];
+            $sql = "SELECT f.id, f.runid, f.rownum, f.message, f.rowdata
+                      FROM {" . import_log::FAIL_TABLE . "} f
+                      JOIN {" . import_log::RUN_TABLE . "} r ON r.id = f.runid
+                     WHERE r.userid = :userid
+                  ORDER BY f.runid, f.rownum, f.id";
+            // Security-lint: ignore P1 (bounded: runs once, for the system context, the only one with this data).
+            $records = $DB->get_recordset_sql($sql, ['userid' => $userid]);
+            foreach ($records as $failure) {
+                $failures[$failure->runid][] = [
+                    'row' => $failure->rownum,
+                    'error' => $failure->message,
+                    'values' => json_decode((string)$failure->rowdata, true),
+                ];
+            }
+            $records->close();
+
             $runs = [];
-            $runids = [];
+            $unfinished = [];
+            // Security-lint: ignore P1 (bounded: runs once, for the system context, the only one with this data).
             foreach ($DB->get_records(import_log::RUN_TABLE, ['userid' => $userid], 'timecreated') as $run) {
-                $runids[] = (int)$run->id;
-                $failures = [];
-                foreach ($DB->get_records(import_log::FAIL_TABLE, ['runid' => $run->id], 'rownum') as $failure) {
-                    $failures[] = [
-                        'row' => $failure->rownum,
-                        'error' => $failure->message,
-                        'values' => json_decode((string)$failure->rowdata, true),
-                    ];
+                if (in_array($run->status, [import_log::STATUS_QUEUED, import_log::STATUS_RUNNING], true)) {
+                    $unfinished[] = (int)$run->id;
                 }
                 $runs[] = [
                     'file' => $run->filename,
@@ -138,14 +151,14 @@ final class provider implements
                     'rowsdone' => $run->rowsdone,
                     'totalrows' => $run->totalrows,
                     'time' => transform::datetime($run->timecreated),
-                    'failures' => $failures,
+                    'failures' => $failures[$run->id] ?? [],
                 ];
             }
             if ($runs) {
                 $subcontext = [get_string('history_heading', 'local_grpcalendarimport')];
                 writer::with_context($context)->export_data($subcontext, (object)['runs' => $runs]);
-                // The uploaded file of a background import that hasn't finished yet.
-                foreach ($runids as $runid) {
+                // The uploaded file of a background import that hasn't finished yet; finished runs have none.
+                foreach ($unfinished as $runid) {
                     writer::with_context($context)->export_area_files(
                         $subcontext,
                         'local_grpcalendarimport',
@@ -172,11 +185,15 @@ final class provider implements
     /**
      * Delete one user's import history.
      *
+     * Deleting the runs also deletes their stored uploads and cancels any queued task\background_import for them
+     * (see import_log::delete_runs()), since the task stores the uploader's user id.
+     *
      * @param approved_contextlist $contextlist The approved contexts.
      */
     public static function delete_data_for_user(approved_contextlist $contextlist) {
         foreach ($contextlist->get_contexts() as $context) {
             if ($context->contextlevel == CONTEXT_SYSTEM) {
+                // Security-lint: ignore P1 (bounded: the only context with this plugin's data is the system context).
                 self::delete_for_userids([$contextlist->get_user()->id]);
             }
         }

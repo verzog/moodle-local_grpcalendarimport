@@ -259,6 +259,7 @@ class importer {
         [$courses, $groups, $users] = self::existing_records($rows);
         $rownum = $firstrow;
         foreach ($rows as $row) {
+            // Security-lint: ignore P1 (each row needs its own event; lookups are preloaded, only the duplicate check runs).
             $result = self::create_event_checked($row, $skipduplicates, $rownum, $courses, $groups, $users);
             $outcome['results'][] = $result;
             $outcome['counts'][$result['status']]++;
@@ -310,12 +311,14 @@ class importer {
         // Chunked, so a file naming thousands of ids stays within the database's limit on query parameters.
         $courses = [];
         foreach (array_chunk($courseids, self::LOOKUP_CHUNK) as $chunk) {
+            // Security-lint: ignore P1 (batched: one query per LOOKUP_CHUNK ids).
             foreach ($DB->get_records_list('course', 'id', $chunk, '', 'id') as $course) {
                 $courses[(int)$course->id] = true;
             }
         }
         $groups = [];
         foreach (array_chunk($groupids, self::LOOKUP_CHUNK) as $chunk) {
+            // Security-lint: ignore P1 (batched: one query per LOOKUP_CHUNK ids).
             foreach ($DB->get_records_list('groups', 'id', $chunk, '', 'id, courseid') as $group) {
                 $groups[(int)$group->id] = (int)$group->courseid;
             }
@@ -323,6 +326,7 @@ class importer {
         $users = [];
         foreach (array_chunk($userids, self::LOOKUP_CHUNK) as $chunk) {
             [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED);
+            // Security-lint: ignore P1 (batched: one query per LOOKUP_CHUNK ids).
             foreach ($DB->get_records_select('user', "id {$insql} AND deleted = 0", $params, '', 'id') as $user) {
                 $users[(int)$user->id] = true;
             }
