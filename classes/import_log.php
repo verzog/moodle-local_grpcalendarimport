@@ -73,7 +73,9 @@ class import_log {
      */
     public static function record(string $filename, string $source, bool $skipduplicates, array $outcome, array $rows): int {
         try {
-            $runid = self::start_run($filename, $source, $skipduplicates, self::STATUS_RUNNING, count($rows));
+            // The import has already happened, so the run starts as done: if saving its results fails partway,
+            // it must never look like an unfinished background import.
+            $runid = self::start_run($filename, $source, $skipduplicates, self::STATUS_DONE, count($rows));
             self::add_results($runid, $outcome['results'], $rows, count($outcome['results']));
             self::finish_run($runid, $outcome['error']);
             return $runid;

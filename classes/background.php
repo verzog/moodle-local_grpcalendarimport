@@ -59,16 +59,30 @@ class background {
     /**
      * Whether a user has a background import that hasn't finished yet.
      *
+     * A run only counts while a task is still queued to carry it on, so a run left unfinished with no task (for
+     * example after Moodle gave up retrying its task) doesn't hide the user's upload form for good.
+     *
      * @param int $userid The user.
      * @return bool
      */
     public static function user_has_pending(int $userid): bool {
         global $DB;
-        return $DB->record_exists_select(
+        $runids = $DB->get_fieldset_select(
             import_log::RUN_TABLE,
+            'id',
             'userid = :userid AND (status = :queued OR status = :running)',
             ['userid' => $userid, 'queued' => import_log::STATUS_QUEUED, 'running' => import_log::STATUS_RUNNING]
         );
+        if (empty($runids)) {
+            return false;
+        }
+        $runids = array_map('intval', $runids);
+        foreach (\core\task\manager::get_adhoc_tasks(task\background_import::class) as $task) {
+            if (in_array((int)($task->get_custom_data()->runid ?? 0), $runids, true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

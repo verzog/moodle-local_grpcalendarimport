@@ -249,6 +249,39 @@ final class background_test extends \advanced_testcase {
     }
 
     /**
+     * Test that an unfinished run only blocks the upload form while a task is still queued to carry it on.
+     */
+    public function test_pending_needs_a_task(): void {
+        global $DB, $USER;
+        // A run left running with no task, as if its task had been given up on.
+        $runid = import_log::start_run('stuck.csv', 'upload', false, import_log::STATUS_RUNNING, 10);
+        $this->assertFalse(background::user_has_pending((int)$USER->id));
+
+        // Queuing a real import makes the user pending until it finishes.
+        $queued = $this->queue_rows(2);
+        $this->assertTrue(background::user_has_pending((int)$USER->id));
+        $sink = $this->redirectMessages();
+        $this->assertTrue(background::process($queued));
+        $sink->close();
+        $DB->delete_records('task_adhoc', ['classname' => '\\' . task\background_import::class]);
+        $this->assertFalse(background::user_has_pending((int)$USER->id));
+        $this->assertSame(import_log::STATUS_RUNNING, $this->get_run($runid)->status);
+    }
+
+    /**
+     * Test that an import from the upload page or the API is recorded as done, so it never looks pending.
+     */
+    public function test_synchronous_import_is_done(): void {
+        global $USER;
+        $file = $this->write_file(2);
+        $outcome = importer::import_file($file, false);
+        unlink($file);
+        $this->assertSame(import_log::STATUS_DONE, $this->get_run($outcome['runid'])->status);
+        $this->assertEquals(2, $this->get_run($outcome['runid'])->rowsdone);
+        $this->assertFalse(background::user_has_pending((int)$USER->id));
+    }
+
+    /**
      * Test that background imports are on until an administrator turns them off.
      */
     public function test_enabled_by_default(): void {
