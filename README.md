@@ -72,6 +72,9 @@ The CSV must include a header row. Column names match the Moodle `{event}` table
 
 `categoryid`, `userid`, `timesort`, `uuid`, `sequence`, `priority`
 
+`userid` must be an existing user's ID; a row naming a user that doesn't exist (or was deleted) fails.
+Leave it blank or `0` to use the person running the import, as Moodle does for any new event.
+
 Column names are not case-sensitive. Any other columns are ignored, including internal `{event}` fields
 such as `component`, `modulename`, `instance`, `repeatid`, `type` and `subscriptionid`. Blank cells use
 the default value, and blank lines are skipped. Only `group` events can be imported.

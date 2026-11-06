@@ -231,11 +231,11 @@ class importer {
             $a = (object)['rows' => count($rows), 'max' => $maxrows];
             $outcome['error'] = get_string('error_toomanyrows', 'local_grpcalendarimport', $a);
         } else {
-            // Look up every course and group in the file once, rather than once per row.
-            [$courses, $groups] = self::existing_courses_and_groups($rows);
+            // Look up every course, group and user in the file once, rather than once per row.
+            [$courses, $groups, $users] = self::existing_records($rows);
             $rownum = 1;
             foreach ($rows as $row) {
-                $result = self::create_event_checked($row, $skipduplicates, $rownum, $courses, $groups);
+                $result = self::create_event_checked($row, $skipduplicates, $rownum, $courses, $groups, $users);
                 $outcome['results'][] = $result;
                 $outcome['counts'][$result['status']]++;
                 $rownum++;
@@ -261,21 +261,22 @@ class importer {
      * @return array Result array with keys: row, status (ok|skip|error), message.
      */
     public static function create_event(array $row, bool $skipduplicates, int $rownum): array {
-        return self::create_event_checked($row, $skipduplicates, $rownum, null, null);
+        return self::create_event_checked($row, $skipduplicates, $rownum, null, null, null);
     }
 
     /**
-     * Find which of the courses and groups named in some rows exist, in two queries for the whole set.
+     * Find which of the courses, groups and users named in some rows exist, one query each for the whole set.
      *
      * @param array $rows Rows, as returned by parse_file().
-     * @return array Two arrays: course ids that exist (as keys, values true), and the course id of each
-     *               group that exists, keyed by group id.
+     * @return array Three arrays: course ids that exist (as keys, values true), the course id of each group
+     *               that exists (keyed by group id), and user ids that exist and aren't deleted (as keys).
      */
-    private static function existing_courses_and_groups(array $rows): array {
+    private static function existing_records(array $rows): array {
         global $DB;
 
         $courseids = [];
         $groupids = [];
+        $userids = [];
         foreach ($rows as $row) {
             $courseid = self::int_column($row, 'courseid', 0);
             if ($courseid > 0) {
@@ -284,6 +285,10 @@ class importer {
             $groupid = self::int_column($row, 'groupid', 0);
             if ($groupid > 0) {
                 $groupids[$groupid] = $groupid;
+            }
+            $userid = self::int_column($row, 'userid', 0);
+            if ($userid > 0) {
+                $userids[$userid] = $userid;
             }
         }
 
@@ -300,17 +305,25 @@ class importer {
                 $groups[(int)$group->id] = (int)$group->courseid;
             }
         }
-        return [$courses, $groups];
+        $users = [];
+        foreach (array_chunk($userids, self::LOOKUP_CHUNK) as $chunk) {
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED);
+            foreach ($DB->get_records_select('user', "id {$insql} AND deleted = 0", $params, '', 'id') as $user) {
+                $users[(int)$user->id] = true;
+            }
+        }
+        return [$courses, $groups, $users];
     }
 
     /**
-     * Create a single group calendar event from a row, using already looked-up courses and groups if given.
+     * Create a single group calendar event from a row, using already looked-up courses, groups and users if given.
      *
      * @param array $row Associative array of columns, named after {event} fields.
      * @param bool $skipduplicates Whether to skip events that already exist.
      * @param int $rownum 1-based row number for reporting.
      * @param bool[]|null $courses Course ids that exist, as keys; null to look the row's course up.
      * @param int[]|null $groups Course id of each group that exists, keyed by group id; null to look the row's group up.
+     * @param bool[]|null $users User ids that exist and aren't deleted, as keys; null to look the row's user up.
      * @return array Result array with keys: row, status (ok|skip|error), message.
      */
     private static function create_event_checked(
@@ -318,7 +331,8 @@ class importer {
         bool $skipduplicates,
         int $rownum,
         ?array $courses,
-        ?array $groups
+        ?array $groups,
+        ?array $users
     ): array {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/calendar/lib.php');
@@ -378,6 +392,17 @@ class importer {
         if (!$groupexists) {
             $a = ['groupid' => $groupid, 'courseid' => $courseid];
             return self::result($rownum, 'error', get_string('error_groupnotfound', 'local_grpcalendarimport', $a));
+        }
+
+        // A userid of 0 or a blank cell is left for calendar_event to fill in with the current user; any other value
+        // must be a user who exists and isn't deleted.
+        if ($userid !== 0) {
+            $userexists = ($users !== null)
+                ? isset($users[$userid])
+                : $DB->record_exists('user', ['id' => $userid, 'deleted' => 0]);
+            if (!$userexists) {
+                return self::result($rownum, 'error', get_string('error_usernotfound', 'local_grpcalendarimport', $userid));
+            }
         }
 
         if ($skipduplicates && self::event_exists($eventname, $courseid, $groupid, $timestart, $eventtype)) {
