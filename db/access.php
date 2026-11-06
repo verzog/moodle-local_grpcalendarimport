@@ -25,11 +25,15 @@
 defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
+    // Imports group calendar events into any course on the site and shows the import history.
+    // RISK_SPAM: the events it creates are shown to every member of the chosen groups.
     'local/grpcalendarimport:manage' => [
-        'riskbitmask'  => RISK_CONFIG,
+        'riskbitmask'  => RISK_CONFIG | RISK_SPAM,
         'captype'      => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes'   => [
+            // Managers run the site's courses and groups, and already hold capabilities with these risks
+            // (for example moodle/badges:manageglobalsettings and moodle/site:sendmessage), so they get this one by default.
             'manager' => CAP_ALLOW,
         ],
     ],

@@ -159,7 +159,12 @@ before calling it. The class does no capability checks: callers must check their
 
 | Capability | Default role | Description |
 |---|---|---|
-| `local/grpcalendarimport:manage` | Manager | Access the import tool |
+| `local/grpcalendarimport:manage` | Manager | Use the import, template and import history pages |
+
+Managers and site administrators find the tool under **Site administration → Plugins → Admin tools**. The
+**Keep import history for** setting is site configuration, so only site administrators can change it.
+The capability is flagged with configuration and spam risks: it creates calendar events in any group on
+the site, so give it only to roles you trust to do that.
 
 ## License
 
