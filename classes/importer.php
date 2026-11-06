@@ -441,7 +441,11 @@ class importer {
             $a = ['name' => $eventname, 'id' => $calendarevent->id];
             return self::result($rownum, 'ok', get_string('result_created', 'local_grpcalendarimport', $a));
         } catch (\Exception $e) {
-            return self::result($rownum, 'error', get_string('error_exception', 'local_grpcalendarimport', $e->getMessage()));
+            // The exception's text can include SQL and table details, so it stays out of the results, the import
+            // history and the logs. Only its error code is shown; developers get the full text through debugging().
+            debugging("Group calendar import, row {$rownum}: " . $e->getMessage(), DEBUG_DEVELOPER);
+            $code = ($e instanceof \moodle_exception) ? $e->errorcode : (new \ReflectionClass($e))->getShortName();
+            return self::result($rownum, 'error', get_string('error_createfailed', 'local_grpcalendarimport', $code));
         }
     }
 

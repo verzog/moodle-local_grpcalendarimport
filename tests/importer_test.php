@@ -211,6 +211,45 @@ final class importer_test extends \advanced_testcase {
     }
 
     /**
+     * Test that when Moodle can't save an event, the row shows an error code but not the database's error text.
+     */
+    public function test_create_failure_hides_exception_text(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $group = $generator->create_group(['courseid' => $course->id]);
+        // The uuid column holds 255 characters, so saving this fails on every supported database.
+        $uuid = str_repeat('x', 300);
+        $file = $this->temp_file("name,courseid,groupid,timestart,uuid\n" .
+            "Too long,{$course->id},{$group->id},1809298800,{$uuid}\n");
+
+        $sink = $this->redirectEvents();
+        $outcome = importer::import_file($file, false);
+        $events = $sink->get_events();
+        $sink->close();
+        unlink($file);
+        // The full error, which may include SQL, goes to developer debugging only.
+        $this->assertDebuggingCalled();
+
+        $expected = get_string('error_createfailed', 'local_grpcalendarimport', 'dmlwriteexception');
+        $this->assertSame(['ok' => 0, 'skip' => 0, 'error' => 1], $outcome['counts']);
+        $this->assertSame($expected, $outcome['results'][0]['message']);
+        $this->assertStringNotContainsString($uuid, $outcome['results'][0]['message']);
+
+        // The import history and the log event get the same safe message.
+        $stored = $DB->get_field(import_log::FAIL_TABLE, 'message', ['runid' => $outcome['runid']], MUST_EXIST);
+        $this->assertSame($expected, $stored);
+        $rowevents = array_values(array_filter($events, function ($event) {
+            return $event instanceof event\import_row_failed;
+        }));
+        $this->assertCount(1, $rowevents);
+        $this->assertSame($expected, $rowevents[0]->other['message']);
+    }
+
+    /**
      * Test that creating a single event also rejects a userid that doesn't belong to a user.
      */
     public function test_create_event_checks_userid(): void {

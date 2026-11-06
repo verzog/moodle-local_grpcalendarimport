@@ -129,6 +129,11 @@ Every import of a file is recorded, whether it came from the upload page or from
 - History older than **Keep import history for** (Site administration → Plugins → Local plugins →
   Calendar Group Event Importer; 90 days by default) is deleted each night by a scheduled task.
 
+If Moodle can't save an event (for example because a value is too long for its database column), the row
+fails with an error code such as `dmlwriteexception`. The full error can include database details, so it
+is never shown, saved in the history or logged; with developer debugging turned on it is shown during the
+import.
+
 The history records which user ran each import, so the plugin's privacy provider exports and deletes it
 on request.
 
