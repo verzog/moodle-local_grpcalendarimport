@@ -24,7 +24,9 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-if ($hassiteconfig) {
+// The import and history pages are for anyone with the manage capability (managers by default), not only
+// site administrators; admin_externalpage checks the capability again when a page is opened.
+if ($hassiteconfig || has_capability('local/grpcalendarimport:manage', context_system::instance())) {
     $ADMIN->add('tools', new admin_externalpage(
         'local_grpcalendarimport',
         get_string('pluginname', 'local_grpcalendarimport'),
@@ -37,7 +39,10 @@ if ($hassiteconfig) {
         new moodle_url('/local/grpcalendarimport/history.php'),
         'local/grpcalendarimport:manage'
     ));
+}
 
+// The history retention setting is site configuration, so it stays with site administrators.
+if ($hassiteconfig) {
     $settings = new admin_settingpage('local_grpcalendarimport_settings', get_string('pluginname', 'local_grpcalendarimport'));
     $retention = [
         30 => get_string('numdays', '', 30),
