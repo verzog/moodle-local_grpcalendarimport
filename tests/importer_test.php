@@ -166,6 +166,70 @@ final class importer_test extends \advanced_testcase {
     }
 
     /**
+     * Test that a whole-file import only accepts a userid of an existing, undeleted user (or none).
+     */
+    public function test_import_file_checks_userid(): void {
+        global $DB, $USER;
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $group = $generator->create_group(['courseid' => $course->id]);
+        $user = $generator->create_user();
+        $deleted = $generator->create_user();
+        delete_user($deleted);
+        $missing = 999999;
+
+        $file = $this->temp_file("name,courseid,groupid,timestart,userid\n" .
+            "No user,{$course->id},{$group->id},1809298800,\n" .
+            "Zero user,{$course->id},{$group->id},1809298800,0\n" .
+            "Real user,{$course->id},{$group->id},1809298800,{$user->id}\n" .
+            "Missing user,{$course->id},{$group->id},1809298800,{$missing}\n" .
+            "Deleted user,{$course->id},{$group->id},1809298800,{$deleted->id}\n" .
+            "Negative user,{$course->id},{$group->id},1809298800,-5\n");
+        $outcome = importer::import_file($file, false);
+        unlink($file);
+
+        $component = 'local_grpcalendarimport';
+        $this->assertSame(['ok' => 3, 'skip' => 0, 'error' => 3], $outcome['counts']);
+        $this->assertSame(['ok', 'ok', 'ok', 'error', 'error', 'error'], array_column($outcome['results'], 'status'));
+        $this->assertSame(get_string('error_usernotfound', $component, $missing), $outcome['results'][3]['message']);
+        $this->assertSame(get_string('error_usernotfound', $component, $deleted->id), $outcome['results'][4]['message']);
+        $this->assertSame(get_string('error_usernotfound', $component, -5), $outcome['results'][5]['message']);
+
+        // The name column is TEXT, which can't go in a get_record() condition, so match names in PHP.
+        $userids = [];
+        foreach ($DB->get_records('event', ['courseid' => $course->id], '', 'id, name, userid') as $event) {
+            $userids[$event->name] = (int)$event->userid;
+        }
+        $this->assertCount(3, $userids);
+        $this->assertSame((int)$user->id, $userids['Real user']);
+        // A blank or 0 userid becomes the user running the import, as calendar_event does for any new event.
+        $this->assertSame((int)$USER->id, $userids['No user']);
+        $this->assertSame((int)$USER->id, $userids['Zero user']);
+    }
+
+    /**
+     * Test that creating a single event also rejects a userid that doesn't belong to a user.
+     */
+    public function test_create_event_checks_userid(): void {
+        $this->resetAfterTest();
+
+        $generator = $this->getDataGenerator();
+        $course = $generator->create_course();
+        $group = $generator->create_group(['courseid' => $course->id]);
+        $user = $generator->create_user();
+        $row = ['name' => 'One event', 'courseid' => $course->id, 'groupid' => $group->id, 'timestart' => '1809298800'];
+
+        $result = importer::create_event($row + ['userid' => 999999], false, 1);
+        $this->assertSame('error', $result['status']);
+        $this->assertSame(get_string('error_usernotfound', 'local_grpcalendarimport', 999999), $result['message']);
+
+        $this->assertSame('ok', importer::create_event($row + ['userid' => $user->id], false, 2)['status']);
+    }
+
+    /**
      * Test that course and group lookups don't add database reads for every row of a file.
      */
     public function test_import_file_lookups_do_not_grow_with_rows(): void {
