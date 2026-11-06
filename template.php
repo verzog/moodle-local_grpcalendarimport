@@ -80,7 +80,7 @@ if ($data = $form->get_data()) {
     $notifications = [];
     if (!empty($outcome['nogroups'])) {
         $notifications[] = $OUTPUT->notification(
-            get_string('template_nogroups', $component, s(implode(', ', $outcome['nogroups']))),
+            template::nogroups_message($outcome['nogroups']),
             \core\output\notification::NOTIFY_WARNING
         );
     }

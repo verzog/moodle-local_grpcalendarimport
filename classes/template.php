@@ -41,6 +41,12 @@ class template {
     /** @var int Most event rows that can be requested per group. */
     public const MAX_EVENTS_PER_GROUP = 50;
 
+    /** @var int Most course names listed in the "courses without groups" warning. */
+    public const MAX_NOGROUPS_LISTED = 10;
+
+    /** @var int Most courses or categories looked up in one database query. */
+    private const LOOKUP_CHUNK = 500;
+
     /**
      * Column names, in the order they appear in the template.
      *
@@ -64,9 +70,6 @@ class template {
      * @return \stdClass[] Course records (id, category, fullname, shortname, sortorder), keyed by id.
      */
     public static function find_courses(int $categoryid, bool $subcategories, array $courseids): array {
-        global $DB;
-
-        $fields = 'id, category, fullname, shortname, sortorder';
         $courses = [];
         if ($categoryid > 0) {
             $category = \core_course_category::get($categoryid, MUST_EXIST, true);
@@ -74,11 +77,11 @@ class template {
             if ($subcategories) {
                 $categoryids = array_merge($categoryids, $category->get_all_children_ids());
             }
-            $courses = $DB->get_records_list('course', 'category', $categoryids, 'sortorder', $fields);
+            $courses = self::get_courses('category', $categoryids);
         }
         $courseids = array_filter(array_map('intval', $courseids));
         if (!empty($courseids)) {
-            $courses += $DB->get_records_list('course', 'id', $courseids, 'sortorder', $fields);
+            $courses += self::get_courses('id', $courseids);
         }
         unset($courses[SITEID]);
 
@@ -86,6 +89,65 @@ class template {
             return $a->sortorder <=> $b->sortorder;
         });
         return $courses;
+    }
+
+    /**
+     * Fetch courses by id or by category, loading each course's context in the same query.
+     *
+     * Preloading the contexts means build() needs no query per course to format its name.
+     *
+     * @param string $field Column to match: 'id' or 'category'.
+     * @param int[] $values Values to match.
+     * @return \stdClass[] Course records (id, category, fullname, shortname, sortorder), keyed by id.
+     */
+    private static function get_courses(string $field, array $values): array {
+        global $DB;
+
+        // The column name goes into the SQL, so only these two are allowed.
+        if (!in_array($field, ['id', 'category'], true)) {
+            throw new \coding_exception("Can't look courses up by '{$field}'.");
+        }
+        $ctxselect = \context_helper::get_preload_record_columns_sql('ctx');
+        $courses = [];
+        foreach (array_chunk(array_values(array_unique($values)), self::LOOKUP_CHUNK) as $chunk) {
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED);
+            $params['contextlevel'] = CONTEXT_COURSE;
+            $sql = "SELECT c.id, c.category, c.fullname, c.shortname, c.sortorder, {$ctxselect}
+                      FROM {course} c
+                 LEFT JOIN {context} ctx ON ctx.instanceid = c.id AND ctx.contextlevel = :contextlevel
+                     WHERE c.{$field} {$insql}";
+            foreach ($DB->get_records_sql($sql, $params) as $course) {
+                // This caches the context and removes its columns from the record.
+                \context_helper::preload_from_record($course);
+                $courses[$course->id] = $course;
+            }
+        }
+        return $courses;
+    }
+
+    /**
+     * Fetch the groups of several courses in one query.
+     *
+     * @param int[] $courseids Course ids.
+     * @return array Course id => list of group records (id, courseid, name), in name order.
+     */
+    private static function get_groups(array $courseids): array {
+        global $DB;
+
+        $bycourse = [];
+        if (empty($courseids)) {
+            return $bycourse;
+        }
+        [$insql, $params] = $DB->get_in_or_equal($courseids, SQL_PARAMS_NAMED);
+        $groups = $DB->get_recordset_sql(
+            "SELECT id, courseid, name FROM {groups} WHERE courseid {$insql} ORDER BY courseid, name, id",
+            $params
+        );
+        foreach ($groups as $group) {
+            $bycourse[$group->courseid][] = $group;
+        }
+        $groups->close();
+        return $bycourse;
     }
 
     /**
@@ -102,47 +164,70 @@ class template {
         $eventspergroup = max(1, min($eventspergroup, self::MAX_EVENTS_PER_GROUP));
         $outcome = ['rows' => [], 'coursecount' => 0, 'groupcount' => 0, 'nogroups' => [], 'truncated' => false];
 
-        foreach ($courses as $course) {
-            $context = \context_course::instance($course->id);
-            $coursename = format_string($course->fullname, true, ['context' => $context, 'escape' => false]);
-            $groups = groups_get_all_groups($course->id, 0, 0, 'g.id, g.name');
-            if (empty($groups)) {
-                $outcome['nogroups'][$course->id] = $coursename;
-                continue;
-            }
-            $coursecounted = false;
-            foreach ($groups as $group) {
-                $groupname = format_string($group->name, true, ['context' => $context, 'escape' => false]);
-                for ($i = 0; $i < $eventspergroup; $i++) {
-                    if (count($outcome['rows']) >= $maxrows) {
-                        $outcome['truncated'] = true;
-                        return $outcome;
+        // Work through the courses a batch at a time, fetching each batch's groups in one query, and stop
+        // as soon as the row limit is reached so the remaining courses are never looked at.
+        foreach (array_chunk($courses, self::LOOKUP_CHUNK) as $batch) {
+            $groupsbycourse = self::get_groups(array_map(function ($course) {
+                return (int)$course->id;
+            }, $batch));
+            foreach ($batch as $course) {
+                $context = \context_course::instance($course->id);
+                $coursename = format_string($course->fullname, true, ['context' => $context, 'escape' => false]);
+                $groups = $groupsbycourse[$course->id] ?? [];
+                if (empty($groups)) {
+                    $outcome['nogroups'][$course->id] = $coursename;
+                    continue;
+                }
+                $coursecounted = false;
+                foreach ($groups as $group) {
+                    $groupname = format_string($group->name, true, ['context' => $context, 'escape' => false]);
+                    for ($i = 0; $i < $eventspergroup; $i++) {
+                        if (count($outcome['rows']) >= $maxrows) {
+                            $outcome['truncated'] = true;
+                            return $outcome;
+                        }
+                        // Count the course and group once their first row is in.
+                        if (!$coursecounted) {
+                            $outcome['coursecount']++;
+                            $coursecounted = true;
+                        }
+                        if ($i === 0) {
+                            $outcome['groupcount']++;
+                        }
+                        $outcome['rows'][] = [
+                            'name' => '',
+                            'courseid' => $course->id,
+                            'course_name' => self::escape_formula($coursename),
+                            'groupid' => $group->id,
+                            'group_name' => self::escape_formula($groupname),
+                            'timestart' => '',
+                            'timeduration' => 3600,
+                            'description' => '',
+                            'location' => '',
+                            'eventtype' => 'group',
+                            'visible' => 1,
+                        ];
                     }
-                    // Count the course and group once their first row is in.
-                    if (!$coursecounted) {
-                        $outcome['coursecount']++;
-                        $coursecounted = true;
-                    }
-                    if ($i === 0) {
-                        $outcome['groupcount']++;
-                    }
-                    $outcome['rows'][] = [
-                        'name' => '',
-                        'courseid' => $course->id,
-                        'course_name' => self::escape_formula($coursename),
-                        'groupid' => $group->id,
-                        'group_name' => self::escape_formula($groupname),
-                        'timestart' => '',
-                        'timeduration' => 3600,
-                        'description' => '',
-                        'location' => '',
-                        'eventtype' => 'group',
-                        'visible' => 1,
-                    ];
                 }
             }
         }
         return $outcome;
+    }
+
+    /**
+     * The warning for courses without groups, listing the first few course names and counting the rest.
+     *
+     * @param string[] $nogroups Course names, as in build()'s nogroups.
+     * @return string The warning, with the course names escaped for HTML.
+     */
+    public static function nogroups_message(array $nogroups): string {
+        $component = 'local_grpcalendarimport';
+        $listed = s(implode(', ', array_slice($nogroups, 0, self::MAX_NOGROUPS_LISTED)));
+        $more = count($nogroups) - self::MAX_NOGROUPS_LISTED;
+        if ($more <= 0) {
+            return get_string('template_nogroups', $component, $listed);
+        }
+        return get_string('template_nogroups_more', $component, (object)['courses' => $listed, 'more' => $more]);
     }
 
     /**

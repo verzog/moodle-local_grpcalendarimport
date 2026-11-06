@@ -130,6 +130,60 @@ final class template_test extends \advanced_testcase {
     }
 
     /**
+     * Test that finding courses and building a template doesn't add database reads for every course.
+     */
+    public function test_build_reads_do_not_grow_with_courses(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $generator = $this->getDataGenerator();
+
+        $reads = function (int $coursecount) use ($DB, $generator): int {
+            $category = $generator->create_category();
+            for ($i = 0; $i < $coursecount; $i++) {
+                $course = $generator->create_course(['category' => $category->id]);
+                $generator->create_group(['courseid' => $course->id]);
+            }
+            // Start each measurement without the courses' contexts in memory, as a fresh page request would.
+            \context_helper::reset_caches();
+            $before = $DB->perf_get_reads();
+            $courses = template::find_courses($category->id, false, []);
+            $outcome = template::build($courses, 1);
+            $after = $DB->perf_get_reads();
+            $this->assertCount($coursecount, $outcome['rows']);
+            // The preloaded context columns are not left on the course records.
+            $this->assertObjectNotHasProperty('ctxid', reset($courses));
+            return $after - $before;
+        };
+
+        $extracourses = 10;
+        $extrareads = $reads(2 + $extracourses) - $reads(2);
+        // Looking each course up on its own took at least one read per course; now it should take none.
+        $this->assertLessThan($extracourses, $extrareads);
+    }
+
+    /**
+     * Test that the "courses without groups" warning lists only the first few names and escapes them.
+     */
+    public function test_nogroups_message(): void {
+        $component = 'local_grpcalendarimport';
+
+        $this->assertSame(
+            get_string('template_nogroups', $component, 'Maths, Art &amp; Design'),
+            template::nogroups_message([2 => 'Maths', 3 => 'Art & Design'])
+        );
+
+        $names = [];
+        for ($i = 1; $i <= template::MAX_NOGROUPS_LISTED + 3; $i++) {
+            $names[$i + 1] = "Course {$i}";
+        }
+        $listed = implode(', ', array_slice($names, 0, template::MAX_NOGROUPS_LISTED));
+        $this->assertSame(
+            get_string('template_nogroups_more', $component, (object)['courses' => $listed, 'more' => 3]),
+            template::nogroups_message($names)
+        );
+    }
+
+    /**
      * Test that names a spreadsheet would read as a formula are quoted.
      */
     public function test_build_escapes_formula_names(): void {

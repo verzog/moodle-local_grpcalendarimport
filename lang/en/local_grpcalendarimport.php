@@ -125,6 +125,7 @@ $string['template_eventsrange'] = 'Enter a number from 1 to {$a}.';
 $string['template_heading'] = 'Create a prefilled template';
 $string['template_intro'] = 'Choose a category, specific courses, or both. The template lists every group in those courses, with one row per event. Fill in each event\'s name and start time (DD/MM/YYYY HH:MM), then upload the file on the import page. If you edit the Excel version, save it as CSV before uploading.';
 $string['template_nogroups'] = 'No groups found in these courses, so they are not in the template: {$a}';
+$string['template_nogroups_more'] = 'No groups found in these courses, so they are not in the template: {$a->courses}, and {$a->more} more.';
 $string['template_norows'] = 'No groups were found in the selected courses, so there is nothing to download.';
 $string['template_preview'] = 'Preview template';
 $string['template_selectsomething'] = 'Choose a category or at least one course.';
