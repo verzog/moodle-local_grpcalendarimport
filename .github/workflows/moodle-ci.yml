@@ -17,3 +17,47 @@ jobs:
   # The checks, Moodle/PHP/database matrix and settings live in verzog/moodle-ci-workflows.
   ci:
     uses: verzog/moodle-ci-workflows/.github/workflows/moodle-plugin-ci.yml@v1
+
+  # Security and code-quality lint from verzog/moodle-security-ci, built from the Moodle Audit Service checklist:
+  # security-lint.php, a known-vulnerability check for third-party code (OSV) and a blocking unused-code check.
+  # It needs no Moodle install, so it finishes in about a minute. Copied from that repo's
+  # ci/github/moodle-ci-security-job.yml; bump SECURITY_CI_REF (and the action pins) deliberately.
+  security:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TZ: Australia/Sydney
+      SECURITY_CI_REF: v1.2.2  # Pin a tag; bump deliberately.
+    steps:
+      - name: Check out plugin
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          path: plugin
+          persist-credentials: false
+
+      - name: Set up PHP (lowest supported)
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962  # 2.40.0
+        with:
+          php-version: '8.2'
+          coverage: none
+          tools: composer
+
+      - name: Fetch moodle-security-ci
+        run: git clone --depth 1 --branch "$SECURITY_CI_REF" https://github.com/verzog/moodle-security-ci.git security-ci
+
+      - name: Security lint
+        if: ${{ !cancelled() }}
+        run: php security-ci/bin/security-lint.php --annotate-prefix=plugin/ plugin
+
+      - name: Known vulnerabilities in third-party code (OSV)
+        if: ${{ !cancelled() }}
+        run: bash security-ci/bin/osv-check.sh plugin
+
+      - name: Unused code (PHPMD, blocking)
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p tools
+          composer require --quiet --no-interaction --working-dir=tools phpmd/phpmd:^2.15
+          tools/vendor/bin/phpmd plugin text security-ci/config/phpmd-unused.xml \
+            --exclude '*/tests/*,*/vendor/*,*/amd/*,*/node_modules/*'
