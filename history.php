@@ -39,6 +39,16 @@ require_capability('local/grpcalendarimport:manage', context_system::instance())
 $component = 'local_grpcalendarimport';
 $perpage = 50;
 
+// A run's status; for a background import that hasn't finished, with how far it has got.
+$statuslabel = function (\stdClass $run) use ($component): string {
+    $label = get_string('history_status_' . $run->status, $component);
+    if (in_array($run->status, [import_log::STATUS_QUEUED, import_log::STATUS_RUNNING], true)) {
+        $a = (object)['done' => $run->rowsdone, 'total' => $run->totalrows];
+        $label .= ' (' . get_string('history_progress', $component, $a) . ')';
+    }
+    return $label;
+};
+
 if ($runid) {
     $run = $DB->get_record(import_log::RUN_TABLE, ['id' => $runid], '*', MUST_EXIST);
 
@@ -95,12 +105,14 @@ if ($runid) {
         [get_string('history_file', $component), s($run->filename)],
         [get_string('history_source', $component), s($run->source)],
         [get_string('skipduplicates', $component), $run->skipduplicates ? get_string('yes') : get_string('no')],
+        [get_string('history_status', $component), $statuslabel($run)],
         [get_string('status_ok', $component), $run->countcreated],
         [get_string('history_skipped', $component), $run->countskipped],
         [get_string('status_error', $component), $run->counterrors],
     ];
     if (!empty($run->fileerror)) {
-        $summary->data[] = [get_string('history_fileerror', $component), s($run->fileerror)];
+        $label = $run->status === import_log::STATUS_STOPPED ? 'history_stopreason' : 'history_fileerror';
+        $summary->data[] = [get_string($label, $component), s($run->fileerror)];
     }
     echo html_writer::table($summary);
 
@@ -137,7 +149,7 @@ if ($runid) {
         }
         echo html_writer::table($table);
         echo $OUTPUT->paging_bar($failcount, $page, $perpage, new moodle_url($pageurl, ['id' => $run->id]));
-    } else if (empty($run->fileerror)) {
+    } else if (empty($run->fileerror) && $run->status === import_log::STATUS_DONE) {
         echo $OUTPUT->notification(get_string('history_nofailures', $component), \core\output\notification::NOTIFY_SUCCESS);
     }
     echo html_writer::link($pageurl, get_string('history_back', $component), ['class' => 'btn btn-link px-0']);
@@ -161,19 +173,23 @@ if ($runid) {
             get_string('history_user', $component),
             get_string('history_file', $component),
             get_string('history_source', $component),
+            get_string('history_status', $component),
             get_string('status_ok', $component),
             get_string('history_skipped', $component),
             get_string('status_error', $component),
             '',
         ];
         foreach ($runs as $run) {
-            $problem = $run->counterrors > 0 || !empty($run->fileerror);
-            $errors = !empty($run->fileerror) ? get_string('history_filerejected', $component) : $run->counterrors;
+            // A stopped background import also has a file error, but it was stopped rather than rejected.
+            $rejected = !empty($run->fileerror) && $run->status === import_log::STATUS_DONE;
+            $problem = $run->counterrors > 0 || $rejected;
+            $errors = $rejected ? get_string('history_filerejected', $component) : $run->counterrors;
             $table->data[] = [
                 userdate($run->timecreated, get_string('strftimedatetimeshort', 'langconfig')),
                 $run->userid ? fullname($run) : '-',
                 s($run->filename),
                 s($run->source),
+                $statuslabel($run),
                 $run->countcreated,
                 $run->countskipped,
                 $problem ? html_writer::span($errors, 'badge bg-danger') : $errors,

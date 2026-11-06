@@ -65,6 +65,8 @@ final class provider_test extends \core_privacy\tests\provider_testcase {
         }, $collection->get_collection());
         $this->assertContains(import_log::RUN_TABLE, $names);
         $this->assertContains(import_log::FAIL_TABLE, $names);
+        // A background import's uploaded file is kept in the file API until it finishes.
+        $this->assertContains('core_files', $names);
     }
 
     /**

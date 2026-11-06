@@ -26,6 +26,9 @@
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+use local_grpcalendarimport\background;
+use local_grpcalendarimport\importer;
+
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 require_once(__DIR__ . '/locallib.php');
@@ -40,22 +43,44 @@ $PAGE->set_heading(get_string('import_heading', 'local_grpcalendarimport'));
 
 $form    = new \local_grpcalendarimport\form\import_form();
 $results = [];
+$historyurl = new moodle_url('/local/grpcalendarimport/history.php');
+// While the user's background import hasn't finished, the form is hidden so a file can't be queued twice.
+$pending = background::user_has_pending((int)$USER->id);
 
 if ($form->is_cancelled()) {
     redirect(new moodle_url('/admin/index.php'));
-} else if ($data = $form->get_data()) {
+} else if (!$pending && ($data = $form->get_data())) {
     // Save uploaded file to a temp location.
     $tmpfile = $form->save_temp_file('csvfile');
+    $filename = (string)$form->get_new_filename('csvfile');
+    $skipduplicates = !empty($data->skipduplicates);
+    $queue = false;
 
     if (!$tmpfile) {
         \core\notification::error(get_string('upload_error', 'local_grpcalendarimport'));
     } else {
-        $outcome = \local_grpcalendarimport\importer::import_file(
+        $headers = [];
+        $rowcount = count(importer::parse_file($tmpfile, $headers));
+        $usebackground = background::enabled();
+        $queue = $usebackground && $rowcount > importer::MAX_UPLOAD_ROWS && $rowcount <= background::MAX_ROWS
+            && empty(importer::missing_columns($headers));
+    }
+    if ($tmpfile && $queue) {
+        // Too big to import while the page loads: cron imports it, and the user is notified when it's done.
+        $runid = background::queue($tmpfile, $filename, $skipduplicates, $rowcount);
+        unlink($tmpfile);
+        $a = (object)['rows' => $rowcount, 'url' => (new moodle_url($historyurl, ['id' => $runid]))->out()];
+        \core\notification::success(get_string('background_queued', 'local_grpcalendarimport', $a));
+        $pending = true;
+    } else if ($tmpfile) {
+        // Small enough to import now. Files that can't be imported (missing columns, no rows, or more rows than
+        // any import accepts) are rejected by import_file() and recorded in the history.
+        $outcome = importer::import_file(
             $tmpfile,
-            !empty($data->skipduplicates),
-            (string)$form->get_new_filename('csvfile'),
+            $skipduplicates,
+            $filename,
             'upload',
-            \local_grpcalendarimport\importer::MAX_UPLOAD_ROWS
+            $usebackground ? background::MAX_ROWS : importer::MAX_UPLOAD_ROWS
         );
         unlink($tmpfile);
 
@@ -67,8 +92,8 @@ if ($form->is_cancelled()) {
         }
         // Point to the saved record of this run whenever something went wrong.
         if ($outcome['runid'] && ($outcome['error'] !== '' || $outcome['counts']['error'] > 0)) {
-            $historyurl = new moodle_url('/local/grpcalendarimport/history.php', ['id' => $outcome['runid']]);
-            \core\notification::info(get_string('history_saved', 'local_grpcalendarimport', $historyurl->out()));
+            $runurl = new moodle_url($historyurl, ['id' => $outcome['runid']]);
+            \core\notification::info(get_string('history_saved', 'local_grpcalendarimport', $runurl->out()));
         }
     }
 }
@@ -175,7 +200,14 @@ $collapsediv = html_writer::tag(
 );
 echo html_writer::div($cardheader . $collapsediv, 'card mb-4');
 
-$form->display();
+if ($pending) {
+    echo $OUTPUT->notification(
+        get_string('background_pending', 'local_grpcalendarimport', $historyurl->out()),
+        \core\output\notification::NOTIFY_INFO
+    );
+} else {
+    $form->display();
+}
 
 if (!empty($results)) {
     echo $OUTPUT->heading(get_string('results_heading', 'local_grpcalendarimport'), 3);

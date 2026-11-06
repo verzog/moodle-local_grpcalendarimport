@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/grpcalendarimport/db" VERSION="20261016" COMMENT="XMLDB file for Moodle local/grpcalendarimport"
+<XMLDB PATH="local/grpcalendarimport/db" VERSION="20261106" COMMENT="XMLDB file for Moodle local/grpcalendarimport"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
@@ -15,6 +15,9 @@
         <FIELD NAME="countskipped" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="counterrors" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="fileerror" TYPE="text" NOTNULL="false" SEQUENCE="false" COMMENT="Why the whole file was rejected (missing columns, no rows), if it was."/>
+        <FIELD NAME="status" TYPE="char" LENGTH="10" NOTNULL="true" DEFAULT="done" SEQUENCE="false" COMMENT="queued, running, done or stopped. Only background imports are ever queued or running."/>
+        <FIELD NAME="totalrows" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="How many data rows the file has."/>
+        <FIELD NAME="rowsdone" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="How many of the rows have been imported so far."/>
         <FIELD NAME="timecreated" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

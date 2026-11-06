@@ -46,6 +46,21 @@ class import_log {
     /** @var int How many old runs the clean-up deletes per batch. */
     public const DELETE_BATCH = 1000;
 
+    /** @var string Status of a background import that is waiting for cron. */
+    public const STATUS_QUEUED = 'queued';
+
+    /** @var string Status of a background import that has started but not finished. */
+    public const STATUS_RUNNING = 'running';
+
+    /** @var string Status of a finished import. Imports from the upload page or the API finish straight away. */
+    public const STATUS_DONE = 'done';
+
+    /** @var string Status of a background import stopped because background imports were turned off. */
+    public const STATUS_STOPPED = 'stopped';
+
+    /** @var string File area holding the uploaded file of a background import until it finishes. */
+    public const FILEAREA = 'queuedimport';
+
     /**
      * Record an import run, its failed rows, and the matching log events.
      *
@@ -57,78 +72,136 @@ class import_log {
      * @return int The new run id, or 0 if it couldn't be recorded.
      */
     public static function record(string $filename, string $source, bool $skipduplicates, array $outcome, array $rows): int {
-        global $DB, $USER;
-
         try {
-            $now = time();
-            $run = (object)[
-                'userid' => (int)($USER->id ?? 0),
-                'filename' => \core_text::substr($filename, 0, 255),
-                'source' => \core_text::substr($source, 0, 100),
-                'skipduplicates' => $skipduplicates ? 1 : 0,
-                'countcreated' => (int)$outcome['counts']['ok'],
-                'countskipped' => (int)$outcome['counts']['skip'],
-                'counterrors' => (int)$outcome['counts']['error'],
-                'fileerror' => $outcome['error'] !== '' ? $outcome['error'] : null,
-                'timecreated' => $now,
-            ];
-            $run->id = $DB->insert_record(self::RUN_TABLE, $run);
-
-            $context = \context_system::instance();
-            $events = 0;
-            // Failures after the ones logged as events don't need their ids, so they're saved in one batch.
-            $unlogged = [];
-            foreach ($outcome['results'] as $result) {
-                if ($result['status'] !== 'error') {
-                    continue;
-                }
-                $rowdata = $rows[$result['row'] - 1] ?? [];
-                $failure = (object)[
-                    'runid' => $run->id,
-                    'rownum' => (int)$result['row'],
-                    'message' => $result['message'],
-                    'rowdata' => json_encode($rowdata),
-                ];
-                if ($events >= self::MAX_ROW_EVENTS) {
-                    $unlogged[] = $failure;
-                } else {
-                    $failid = $DB->insert_record(self::FAIL_TABLE, $failure);
-                    $events++;
-                    event\import_row_failed::create([
-                        'context' => $context,
-                        'objectid' => $failid,
-                        'other' => [
-                            'runid' => $run->id,
-                            'filename' => $run->filename,
-                            'rownum' => (int)$result['row'],
-                            'message' => $result['message'],
-                            'rowdata' => $rowdata,
-                        ],
-                    ])->trigger();
-                }
-            }
-            if ($unlogged) {
-                $DB->insert_records(self::FAIL_TABLE, $unlogged);
-            }
-
-            event\import_completed::create([
-                'context' => $context,
-                'objectid' => $run->id,
-                'other' => [
-                    'filename' => $run->filename,
-                    'source' => $run->source,
-                    'created' => $run->countcreated,
-                    'skipped' => $run->countskipped,
-                    'errors' => $run->counterrors,
-                    'fileerror' => (string)$run->fileerror,
-                ],
-            ])->trigger();
-
-            return (int)$run->id;
+            $runid = self::start_run($filename, $source, $skipduplicates, self::STATUS_RUNNING, count($rows));
+            self::add_results($runid, $outcome['results'], $rows, count($outcome['results']));
+            self::finish_run($runid, $outcome['error']);
+            return $runid;
         } catch (\Throwable $e) {
             debugging('Could not record the group calendar import history: ' . $e->getMessage(), DEBUG_DEVELOPER);
             return 0;
         }
+    }
+
+    /**
+     * Start recording a run, with no results yet.
+     *
+     * @param string $filename Name of the imported file, for display.
+     * @param string $source What ran the import: 'upload', or the calling component's name.
+     * @param bool $skipduplicates Whether duplicates are skipped.
+     * @param string $status One of the STATUS_ constants.
+     * @param int $totalrows How many data rows the file has.
+     * @return int The new run id.
+     */
+    public static function start_run(string $filename, string $source, bool $skipduplicates, string $status, int $totalrows): int {
+        global $DB, $USER;
+        return (int)$DB->insert_record(self::RUN_TABLE, (object)[
+            'userid' => (int)($USER->id ?? 0),
+            'filename' => \core_text::substr($filename, 0, 255),
+            'source' => \core_text::substr($source, 0, 100),
+            'skipduplicates' => $skipduplicates ? 1 : 0,
+            'countcreated' => 0,
+            'countskipped' => 0,
+            'counterrors' => 0,
+            'fileerror' => null,
+            'status' => $status,
+            'totalrows' => $totalrows,
+            'rowsdone' => 0,
+            'timecreated' => time(),
+        ]);
+    }
+
+    /**
+     * Add some rows' results to a run: its counts, its failed rows, and their log events.
+     *
+     * Only the first MAX_ROW_EVENTS failures of a run, across every call, are logged as events.
+     *
+     * @param int $runid The run.
+     * @param array $results Results for the rows, as returned by importer::create_event().
+     * @param array $rows The file's rows, keyed from 0, so failed rows can be stored with their values.
+     * @param int $rowsdone How many of the file's rows have now been processed in all.
+     */
+    public static function add_results(int $runid, array $results, array $rows, int $rowsdone): void {
+        global $DB;
+        $run = $DB->get_record(self::RUN_TABLE, ['id' => $runid], '*', MUST_EXIST);
+        $context = \context_system::instance();
+        $counts = ['ok' => 0, 'skip' => 0, 'error' => 0];
+        // Failures already stored for this run have used up that many of its log events.
+        $events = $DB->count_records(self::FAIL_TABLE, ['runid' => $runid]);
+        // Failures after the ones logged as events don't need their ids, so they're saved in one batch.
+        $unlogged = [];
+        foreach ($results as $result) {
+            $counts[$result['status']]++;
+            if ($result['status'] !== 'error') {
+                continue;
+            }
+            $rowdata = $rows[$result['row'] - 1] ?? [];
+            $failure = (object)[
+                'runid' => $runid,
+                'rownum' => (int)$result['row'],
+                'message' => $result['message'],
+                'rowdata' => json_encode($rowdata),
+            ];
+            if ($events >= self::MAX_ROW_EVENTS) {
+                $unlogged[] = $failure;
+            } else {
+                $failid = $DB->insert_record(self::FAIL_TABLE, $failure);
+                $events++;
+                event\import_row_failed::create([
+                    'context' => $context,
+                    'objectid' => $failid,
+                    'other' => [
+                        'runid' => $runid,
+                        'filename' => $run->filename,
+                        'rownum' => (int)$result['row'],
+                        'message' => $result['message'],
+                        'rowdata' => $rowdata,
+                    ],
+                ])->trigger();
+            }
+        }
+        if ($unlogged) {
+            $DB->insert_records(self::FAIL_TABLE, $unlogged);
+        }
+
+        $DB->update_record(self::RUN_TABLE, (object)[
+            'id' => $runid,
+            'countcreated' => $run->countcreated + $counts['ok'],
+            'countskipped' => $run->countskipped + $counts['skip'],
+            'counterrors' => $run->counterrors + $counts['error'],
+            'rowsdone' => $rowsdone,
+        ]);
+    }
+
+    /**
+     * Finish a run and log it as completed.
+     *
+     * @param int $runid The run.
+     * @param string $fileerror Why the whole file was rejected or stopped, or '' if it wasn't.
+     * @param string $status STATUS_DONE, or STATUS_STOPPED for a background import that was turned off.
+     * @return \stdClass The finished run.
+     */
+    public static function finish_run(int $runid, string $fileerror = '', string $status = self::STATUS_DONE): \stdClass {
+        global $DB;
+        $DB->update_record(self::RUN_TABLE, (object)[
+            'id' => $runid,
+            'status' => $status,
+            'fileerror' => $fileerror !== '' ? $fileerror : null,
+        ]);
+        $run = $DB->get_record(self::RUN_TABLE, ['id' => $runid], '*', MUST_EXIST);
+        event\import_completed::create([
+            'context' => \context_system::instance(),
+            'objectid' => $runid,
+            'other' => [
+                'filename' => $run->filename,
+                'source' => $run->source,
+                'created' => (int)$run->countcreated,
+                'skipped' => (int)$run->countskipped,
+                'errors' => (int)$run->counterrors,
+                'fileerror' => (string)$run->fileerror,
+            ],
+        ])->trigger();
+        return $run;
     }
 
     /**
@@ -141,14 +214,20 @@ class import_log {
         if (empty($runids)) {
             return;
         }
+        $fs = get_file_storage();
+        $contextid = \context_system::instance()->id;
         foreach (array_chunk($runids, 500) as $chunk) {
+            // A background import's uploaded file is normally deleted when it finishes; this catches any left over.
+            foreach ($chunk as $runid) {
+                $fs->delete_area_files($contextid, 'local_grpcalendarimport', self::FILEAREA, $runid);
+            }
             $DB->delete_records_list(self::FAIL_TABLE, 'runid', $chunk);
             $DB->delete_records_list(self::RUN_TABLE, 'id', $chunk);
         }
     }
 
     /**
-     * Delete runs older than a given time.
+     * Delete runs older than a given time, except background imports that haven't finished.
      *
      * @param int $before Delete runs recorded before this timestamp.
      * @param int $batch How many runs to fetch and delete at a time.
@@ -161,8 +240,8 @@ class import_log {
         do {
             $runids = array_keys($DB->get_records_select(
                 self::RUN_TABLE,
-                'timecreated < :before',
-                ['before' => $before],
+                'timecreated < :before AND status <> :queued AND status <> :running',
+                ['before' => $before, 'queued' => self::STATUS_QUEUED, 'running' => self::STATUS_RUNNING],
                 'id',
                 'id',
                 0,
