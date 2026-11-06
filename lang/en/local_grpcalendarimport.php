@@ -57,6 +57,7 @@ $string['error_missingname'] = 'Missing name.';
 $string['error_norows'] = 'The file has a header row but no events to import.';
 $string['error_timestart'] = 'Invalid or missing timestart.';
 $string['error_timestartformat'] = 'Could not read timestart "{$a}". Use DD/MM/YYYY HH:MM (for example 03/05/2027 09:00) or a Unix timestamp.';
+$string['error_toomanyrows'] = 'The file has {$a->rows} events, more than the {$a->max} that can be imported at once. Nothing was imported. Split the file into smaller files and import each one.';
 $string['event_import_completed'] = 'Group calendar import completed';
 $string['event_import_row_failed'] = 'Group calendar import row failed';
 $string['event_message'] = 'Event name / message';

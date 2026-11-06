@@ -39,6 +39,12 @@ class importer {
     /** @var int Version of this API. Raised only when a public method changes in a breaking way. */
     public const API_VERSION = 1;
 
+    /** @var int Most rows the upload page imports from one file; larger files are rejected before anything is created. */
+    public const MAX_UPLOAD_ROWS = 2000;
+
+    /** @var int Most ids looked up in one database query. */
+    private const LOOKUP_CHUNK = 1000;
+
     /**
      * Parse a CSV or TSV file into an array of associative arrays keyed by header.
      *
@@ -201,6 +207,7 @@ class importer {
      * @param string $filename Name to show for the file in the history; defaults to the file's own name.
      * @param string $source What is running the import, shown in the history: e.g. 'upload' or a component
      *                       name such as 'tool_automate'. Defaults to 'api'.
+     * @param int $maxrows Reject the whole file, creating nothing, if it has more data rows than this; 0 for no limit.
      * @return array Keys: error (string, empty when the file was processed), counts (ok, skip, error),
      *               results (one create_event() result per row), runid (import history id, 0 if not recorded).
      */
@@ -208,7 +215,8 @@ class importer {
         string $filepath,
         bool $skipduplicates,
         string $filename = '',
-        string $source = ''
+        string $source = '',
+        int $maxrows = 0
     ): array {
         $outcome = ['error' => '', 'counts' => ['ok' => 0, 'skip' => 0, 'error' => 0], 'results' => []];
 
@@ -219,10 +227,15 @@ class importer {
             $outcome['error'] = get_string('error_missingcolumns', 'local_grpcalendarimport', implode(', ', $missing));
         } else if (empty($rows)) {
             $outcome['error'] = get_string('error_norows', 'local_grpcalendarimport');
+        } else if ($maxrows > 0 && count($rows) > $maxrows) {
+            $a = (object)['rows' => count($rows), 'max' => $maxrows];
+            $outcome['error'] = get_string('error_toomanyrows', 'local_grpcalendarimport', $a);
         } else {
+            // Look up every course and group in the file once, rather than once per row.
+            [$courses, $groups] = self::existing_courses_and_groups($rows);
             $rownum = 1;
             foreach ($rows as $row) {
-                $result = self::create_event($row, $skipduplicates, $rownum);
+                $result = self::create_event_checked($row, $skipduplicates, $rownum, $courses, $groups);
                 $outcome['results'][] = $result;
                 $outcome['counts'][$result['status']]++;
                 $rownum++;
@@ -248,6 +261,65 @@ class importer {
      * @return array Result array with keys: row, status (ok|skip|error), message.
      */
     public static function create_event(array $row, bool $skipduplicates, int $rownum): array {
+        return self::create_event_checked($row, $skipduplicates, $rownum, null, null);
+    }
+
+    /**
+     * Find which of the courses and groups named in some rows exist, in two queries for the whole set.
+     *
+     * @param array $rows Rows, as returned by parse_file().
+     * @return array Two arrays: course ids that exist (as keys, values true), and the course id of each
+     *               group that exists, keyed by group id.
+     */
+    private static function existing_courses_and_groups(array $rows): array {
+        global $DB;
+
+        $courseids = [];
+        $groupids = [];
+        foreach ($rows as $row) {
+            $courseid = self::int_column($row, 'courseid', 0);
+            if ($courseid > 0) {
+                $courseids[$courseid] = $courseid;
+            }
+            $groupid = self::int_column($row, 'groupid', 0);
+            if ($groupid > 0) {
+                $groupids[$groupid] = $groupid;
+            }
+        }
+
+        // Chunked, so a file naming thousands of ids stays within the database's limit on query parameters.
+        $courses = [];
+        foreach (array_chunk($courseids, self::LOOKUP_CHUNK) as $chunk) {
+            foreach ($DB->get_records_list('course', 'id', $chunk, '', 'id') as $course) {
+                $courses[(int)$course->id] = true;
+            }
+        }
+        $groups = [];
+        foreach (array_chunk($groupids, self::LOOKUP_CHUNK) as $chunk) {
+            foreach ($DB->get_records_list('groups', 'id', $chunk, '', 'id, courseid') as $group) {
+                $groups[(int)$group->id] = (int)$group->courseid;
+            }
+        }
+        return [$courses, $groups];
+    }
+
+    /**
+     * Create a single group calendar event from a row, using already looked-up courses and groups if given.
+     *
+     * @param array $row Associative array of columns, named after {event} fields.
+     * @param bool $skipduplicates Whether to skip events that already exist.
+     * @param int $rownum 1-based row number for reporting.
+     * @param bool[]|null $courses Course ids that exist, as keys; null to look the row's course up.
+     * @param int[]|null $groups Course id of each group that exists, keyed by group id; null to look the row's group up.
+     * @return array Result array with keys: row, status (ok|skip|error), message.
+     */
+    private static function create_event_checked(
+        array $row,
+        bool $skipduplicates,
+        int $rownum,
+        ?array $courses,
+        ?array $groups
+    ): array {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/calendar/lib.php');
 
@@ -292,12 +364,18 @@ class importer {
         }
 
         // Verify course exists.
-        if (!$DB->record_exists('course', ['id' => $courseid])) {
+        $courseexists = ($courses !== null)
+            ? isset($courses[$courseid])
+            : $DB->record_exists('course', ['id' => $courseid]);
+        if (!$courseexists) {
             return self::result($rownum, 'error', get_string('error_coursenotfound', 'local_grpcalendarimport', $courseid));
         }
 
         // Verify group exists and belongs to this course.
-        if (!$DB->record_exists('groups', ['id' => $groupid, 'courseid' => $courseid])) {
+        $groupexists = ($groups !== null)
+            ? (($groups[$groupid] ?? 0) === $courseid)
+            : $DB->record_exists('groups', ['id' => $groupid, 'courseid' => $courseid]);
+        if (!$groupexists) {
             $a = ['groupid' => $groupid, 'courseid' => $courseid];
             return self::result($rownum, 'error', get_string('error_groupnotfound', 'local_grpcalendarimport', $a));
         }

@@ -10,6 +10,8 @@ file via a simple admin interface.
 - Skips duplicate events (configurable) — checks by name, course, group, time, and event type
 - Validates that each course and group exist before creating events
 - Displays a per-row results table showing created, skipped, and errored rows
+- Imports up to 2,000 events per uploaded file; a larger file is rejected before anything is created,
+  so split it into smaller files
 
 ## Requirements
 
@@ -134,7 +136,7 @@ calendar CSV import.
 
 | Method | Purpose |
 |---|---|
-| `import_file($filepath, $skipduplicates, $filename = '', $source = '')` | Import a whole file (see below) |
+| `import_file($filepath, $skipduplicates, $filename = '', $source = '', $maxrows = 0)` | Import a whole file (see below) |
 | `create_event($row, $skipduplicates, $rownum)` | Create one event from a row keyed by the column names above |
 | `event_exists($name, $courseid, $groupid, $timestart, $eventtype)` | Duplicate check used by `create_event()` |
 | `parse_file($filepath, &$headers)` / `missing_columns($headers)` | Read and check a file without importing it |
@@ -143,6 +145,11 @@ calendar CSV import.
 `import_file()` returns the created/skipped/error counts, a result per row, and `runid`, the run's id in
 the import history. Pass your component name as `$source` (e.g. `'tool_automate'`) and the original file
 name as `$filename`, so the history shows what ran the import and on which file.
+
+`import_file()` has no row limit unless you pass `$maxrows`; the upload page passes
+`importer::MAX_UPLOAD_ROWS` (2,000). A file with more data rows than `$maxrows` is rejected whole, with
+nothing created, and the reason is in `error`. The import runs in the calling request, so import large
+files from a scheduled or adhoc task rather than a web page.
 
 Check `class_exists('\local_grpcalendarimport\importer')` and `importer::API_VERSION` (currently `1`)
 before calling it. The class does no capability checks: callers must check their own.

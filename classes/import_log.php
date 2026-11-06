@@ -76,18 +76,23 @@ class import_log {
 
             $context = \context_system::instance();
             $events = 0;
+            // Failures after the ones logged as events don't need their ids, so they're saved in one batch.
+            $unlogged = [];
             foreach ($outcome['results'] as $result) {
                 if ($result['status'] !== 'error') {
                     continue;
                 }
                 $rowdata = $rows[$result['row'] - 1] ?? [];
-                $failid = $DB->insert_record(self::FAIL_TABLE, (object)[
+                $failure = (object)[
                     'runid' => $run->id,
                     'rownum' => (int)$result['row'],
                     'message' => $result['message'],
                     'rowdata' => json_encode($rowdata),
-                ]);
-                if ($events < self::MAX_ROW_EVENTS) {
+                ];
+                if ($events >= self::MAX_ROW_EVENTS) {
+                    $unlogged[] = $failure;
+                } else {
+                    $failid = $DB->insert_record(self::FAIL_TABLE, $failure);
                     $events++;
                     event\import_row_failed::create([
                         'context' => $context,
@@ -101,6 +106,9 @@ class import_log {
                         ],
                     ])->trigger();
                 }
+            }
+            if ($unlogged) {
+                $DB->insert_records(self::FAIL_TABLE, $unlogged);
             }
 
             event\import_completed::create([
